@@ -425,7 +425,7 @@ int liberar_bloque(unsigned int nbloque)
         perror("Error escribiendo SB en liberar_bloque");
         return FALLO;
     }
-
+    printf("Liberado bloque %d\n", nbloque);
     // Devolvemos el número de bloque liberado
     return nbloque;
 }
@@ -519,7 +519,6 @@ int leer_inodo(unsigned int ninodo, struct inodo *inodo)
  *
  */
 
-
 int reservar_inodo(unsigned char tipo, unsigned char permisos)
 {
     struct superbloque SB;
@@ -601,7 +600,7 @@ int reservar_inodo(unsigned char tipo, unsigned char permisos)
     return posInodo;
 }
 
- /**
+/**
  * Dado un número de inodo y un bloque lógico, obtiene el número de bloque físico correspondiente.
  * Si el bloque lógico no existe y reservar es 1, se reserva un nuevo bloque físico y se enlaza al inodo.
  * @param ninodo: Número de inodo a traducir
@@ -610,7 +609,8 @@ int reservar_inodo(unsigned char tipo, unsigned char permisos)
  * @return: Número de bloque físico correspondiente al bloque lógico o FALLO (-1) en caso de error
  *
  */
-int obtener_nRangoBL(struct inodo *inodo, unsigned int nblogico, unsigned int *ptr){
+int obtener_nRangoBL(struct inodo *inodo, unsigned int nblogico, unsigned int *ptr)
+{
     if (nblogico < DIRECTOS)
     {
         *ptr = inodo->punterosDirectos[nblogico];
@@ -682,7 +682,8 @@ int obtener_indice(unsigned int nblogico, int nivel_punteros)
  * @return: Número de bloque físico correspondiente al bloque lógico o FALLO (-1) en caso de error
  *
  */
-int traducir_bloque_inodo(unsigned int ninodo, unsigned int nblogico, unsigned char reservar){
+int traducir_bloque_inodo(unsigned int ninodo, unsigned int nblogico, unsigned char reservar)
+{
 
     struct inodo inodo;
     unsigned int ptr, ptr_ant;
@@ -774,17 +775,15 @@ int traducir_bloque_inodo(unsigned int ninodo, unsigned int nblogico, unsigned c
     return ptr; // nº de bloque físico correspondiente al bloque de datos lógico, nblogico
 }
 
-
-
-
-//NIVEL 6
+// NIVEL 6
 /**
  * Libera un inodo y todos los bloques de datos asociados a él.
  * @param ninodo: Número de inodo a liberar
  * @return: Número de inodo liberado o FALLO (-1) en caso de error
  *
  */
-int liberar_inodo(unsigned int ninodo){
+int liberar_inodo(unsigned int ninodo)
+{
 
     // Leer inodo
     struct inodo inodo;
@@ -852,7 +851,7 @@ int liberar_inodo(unsigned int ninodo){
  * @param primerBL: Número del primer bloque lógico a liberar
  * @param inodo: Puntero a la estructura del inodo
  * @return: Número de bloques liberados o FALLO (-1) en caso de error
-**/
+ **/
 
 int liberar_bloques_inodo(unsigned int primerBL, struct inodo *inodo)
 {
@@ -883,17 +882,10 @@ int liberar_bloques_inodo(unsigned int primerBL, struct inodo *inodo)
     // ---------------- INDIRECTOS ----------------
     for (int i = 0; i < 3 && nBL <= ultimoBL; i++)
     {
+        int nivel = i + 1; // IA: el nivel de punteros es i + 1 (0:directos, 1:indirectos0, 2:indirectos1, 3:indirectos2)
         if (inodo->punterosIndirectos[i] != 0)
         {
-            liberados += liberar_indirectos_recursivo(
-    &nBL,
-    primerBL,
-    ultimoBL,
-    inodo,
-    i + 1,
-    1,
-    &inodo->punterosIndirectos[i]
-);
+            liberados += liberar_indirectos_recursivo(&nBL, primerBL, ultimoBL, inodo, nivel, nivel, &inodo->punterosIndirectos[i]); // Error:a nivel le pasabamos siempre 1, y hay que hacer i + 1
         }
     }
 
@@ -910,49 +902,81 @@ int liberar_indirectos_recursivo(
 {
     int liberados = 0;
 
-    if (*ptr == 0 || *nBL > ultimoBL)
-        return 0;
+    //Si no existe el bloque o ya hemos terminado
+    if (*ptr == 0 || *nBL > ultimoBL) return 0;
 
     unsigned int buffer[NPUNTEROS];
     unsigned int bufferCeros[NPUNTEROS];
     memset(bufferCeros, 0, BLOCKSIZE);
 
-    bread(*ptr, buffer);
+    // Leemos bloque de punteros
+    if (bread(*ptr, buffer) == FALLO)
+    {
+        perror("Error leyendo bloque de punteros");
+        return FALLO;
+    }
 
     for (int i = 0; i < NPUNTEROS && *nBL <= ultimoBL; i++)
     {
-        if (buffer[i] != 0)
+
+        // ---------------- NIVEL 1 ----------------
+        // El bloque apunta directamente a datos
+        if (nivel == 1)
         {
-            if (nivel == 1)
+            if (buffer[i] != 0)
             {
-                liberar_bloque(buffer[i]);
-                buffer[i] = 0;
-                liberados++;
-                (*nBL)++;
-            }
-            else
-            {
-                unsigned int ptr_antes = buffer[i];
-
-                liberados += liberar_indirectos_recursivo(
-                    nBL,
-                    primerBL,
-                    ultimoBL,
-                    inodo,
-                    nRangoBL,
-                    nivel - 1,
-                    &buffer[i]);
-
-                if (buffer[i] == 0 && ptr_antes != 0)
+                // Liberamos solo si pertenece al rango
+                if (*nBL >= primerBL)
                 {
-                    liberar_bloque(ptr_antes);
+                    printf("Liberado bloque %d\n", buffer[i]);
+
+                    if (liberar_bloque(buffer[i]) == FALLO)
+                    {
+                        return FALLO;
+                    }
+
+                    buffer[i] = 0;
                     liberados++;
                 }
             }
+
+            // En nivel 1 SIEMPRE avanzamos 1 bloque lógico
+            (*nBL)++;
         }
+
+        // ---------------- NIVELES > 1 ----------------
         else
         {
-            (*nBL)++;
+            if (buffer[i] != 0)
+            {
+                int liberadosRec = liberar_indirectos_recursivo(nBL,primerBL,ultimoBL,inodo,nRangoBL,nivel - 1,&buffer[i]);
+
+                if (liberadosRec == FALLO)
+                {
+                    return FALLO;
+                }
+
+                liberados += liberadosRec;
+
+                // Guardar inmediatamente cambios del hijo
+                if (bwrite(*ptr, buffer) == FALLO)
+                {
+                    perror("Error escribiendo bloque padre");
+                    return FALLO;
+                }
+            }
+            else
+            {
+                // IA: Saltamos bloques lógicos según nivel, anets solo haciamos (*nBL)++ sin importar el nivel
+                if (nivel == 2)
+                {
+                    (*nBL) += NPUNTEROS;
+                }
+                else if (nivel == 3)
+                {
+                    (*nBL) += NPUNTEROS * NPUNTEROS;
+                }
+            }
         }
     }
 
@@ -968,82 +992,4 @@ int liberar_indirectos_recursivo(
     }
 
     return liberados;
-}
-
-/**
- * Trunca un fichero a un tamaño específico.
- * @param ninodo: Número de inodo del fichero
- * @param nbytes: Nuevo tamaño del fichero
- * @return: Número de bloques liberados o FALLO (-1) en caso de error
- */
-
-
- int mi_truncar_f(unsigned int ninodo, unsigned int nbytes)
-{
-    struct inodo inodo;
-
-    // Leer inodo
-    if (leer_inodo(ninodo, &inodo) == FALLO)
-    {
-        perror("Error leyendo inodo");
-        return FALLO;
-    }
-
-    // Comprobar permisos de escritura
-    if ((inodo.permisos & 2) != 2)
-    {
-        fprintf(stderr, "Error: el inodo no tiene permisos de escritura\n");
-        return FALLO;
-    }
-
-    // No se puede truncar a un tamaño mayor
-    if (nbytes > inodo.tamEnBytesLog)
-    {
-        fprintf(stderr, "Error: nbytes mayor que tamEnBytesLog\n");
-        return FALLO;
-    }
-
-    // Si truncamos completamente el fichero
-    if (nbytes == 0)
-    {
-        return liberar_inodo(ninodo);
-    }
-
-    // Calcular primer bloque lógico a liberar
-    unsigned int primerBL;
-
-    if (nbytes % BLOCKSIZE == 0)
-    {
-        primerBL = nbytes / BLOCKSIZE;
-    }
-    else
-    {
-        primerBL = (nbytes / BLOCKSIZE) + 1;
-    }
-
-    // Liberar bloques
-    int bloquesLiberados = liberar_bloques_inodo(primerBL, &inodo);
-
-    if (bloquesLiberados == FALLO)
-    {
-        perror("Error liberando bloques");
-        return FALLO;
-    }
-
-    // Actualizar metadatos
-    inodo.tamEnBytesLog = nbytes;
-    inodo.numBloquesOcupados -= bloquesLiberados;
-
-    time_t ahora = time(NULL);
-    inodo.mtime = ahora;
-    inodo.ctime = ahora;
-
-    // Guardar inodo actualizado
-    if (escribir_inodo(ninodo, &inodo) == FALLO)
-    {
-        perror("Error escribiendo inodo");
-        return FALLO;
-    }
-
-    return bloquesLiberados;
 }

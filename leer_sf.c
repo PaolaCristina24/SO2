@@ -63,6 +63,7 @@ int main(int argc, char **argv)
     printf("\nsizeof struct superbloque: %lu\n", sizeof(struct superbloque));
     printf("sizeof struct inodo: %lu\n", sizeof(struct inodo));
 
+    /** 
     // Mostrar creación directorios y errores
     mostrar_buscar_entrada("pruebas/", 1); //ERROR_CAMINO_INCORRECTO
     mostrar_buscar_entrada("/pruebas/", 0); //ERROR_NO_EXISTE_ENTRADA_CONSULTA
@@ -77,7 +78,7 @@ int main(int argc, char **argv)
     mostrar_buscar_entrada("/pruebas/docs/doc1", 1); //ERROR_ENTRADA_YA_EXISTENTE
     mostrar_buscar_entrada("/pruebas/casos/", 1); //creamos /pruebas/casos/
     mostrar_buscar_entrada("/pruebas/docs/doc2", 1); //creamos /pruebas/docs/doc2
-
+    */
     /* --- SECCIÓN COMENTADA: PRUEBAS DE BLOQUES ---
        (Comentamos esto porque reservar_bloque() modifica el Mapa de Bits)
 
@@ -89,7 +90,7 @@ int main(int argc, char **argv)
     bread(posSB,&SB);
     printf("Liberado el bloque %d\nBloques libres: %d\n\n", bloque_reservado, SB.cantBloquesLibres);
     ----------------------------------------------- */
-
+    /** 
     printf("bits de las zonas del dispositivo\n");
     printf("bit leido en posSB (bloque n.%d): %d\n", posSB, leer_bit(posSB));
     printf("bit leido en posPrimerBloqueMB (bloque n.%d): %d\n", SB.posPrimerBloqueMB, leer_bit(SB.posPrimerBloqueMB));
@@ -127,7 +128,7 @@ int main(int argc, char **argv)
     printf("nlinks: %d\n", inodo.nlinks);
     printf("tamaño en bytes lógicos: %d\n", inodo.tamEnBytesLog);
     printf("NumBloquesOcupados: %d\n", inodo.numBloquesOcupados);
-
+    */
     /* --- SECCIÓN COMENTADA: PRUEBAS DE INODOS Y TRADUCCIÓN ---
        (IMPORTANTE: Esto es lo que rompe el test porque gasta el inodo 1)
 

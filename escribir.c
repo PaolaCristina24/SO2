@@ -28,18 +28,18 @@ int main(int argc, char *argv[]) {
         // Reservamos un solo inodo para todas las escrituras
         ninodo = reservar_inodo('f', 6);
         if (ninodo == -1) return -1;
-        printf("Se ha reservado el inodo: %d\n", ninodo);
+        printf("Nº inodo reservado:: %d\n", ninodo);
     }
 
     for (int i = 0; i < num_escrituras; i++) {
-        if (diferentes_inodos == 1) {
+        if (diferentes_inodos > 0) {
             // Reservamos un inodo nuevo para cada offset
             ninodo = reservar_inodo('f', 6);
             if (ninodo == -1) break;
-            printf("Escritura en offset %u. Se ha reservado el inodo: %d\n", offsets[i], ninodo);
+            printf(" Nº inodo reservado: %d\n", ninodo);
         }
 
-        printf("Indicando escritura en offset: %u\n", offsets[i]);
+        printf("offset: %u\n", offsets[i]);
         
         // 3. Escribir en el inodo
         int bytes_escritos = mi_write_f(ninodo, texto, offsets[i], longitud);
