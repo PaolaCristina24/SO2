@@ -88,15 +88,9 @@ int escribir_inodo(unsigned int ninodo, struct inodo *inodo);
 int reservar_inodo(unsigned char tipo, unsigned char permisos);
 
 int liberar_bloques_inodo(unsigned int primerBL, struct inodo *inodo);
-int liberar_indirectos_recursivo(
-    unsigned int *nBL,
-    unsigned int ptr,
-    unsigned int ultimoBL,
-    struct inodo *inodo,
-    int nivel,
-    int nivel_punteros,
-    unsigned int *bloquesLiberados
-);
+int liberar_directos(unsigned int *nBL,unsigned int ultimoBL,struct inodo *inodo,int *eof);
+
+int liberar_indirectos_recursivo(unsigned int *nBL,unsigned int primerBL,unsigned int ultimoBL,struct inodo *inodo,int nRangoBL,unsigned int nivel_punteros,unsigned int *ptr,int *eof);
 
 int traducir_bloque_inodo(unsigned int ninodo, unsigned int nblogico, unsigned char reservar);
 
