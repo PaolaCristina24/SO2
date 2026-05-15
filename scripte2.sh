@@ -113,8 +113,8 @@ echo -e "\x1B[38;2;17;245;120m$ ./mi_escribir  disco /dir1/dir11/fic111 \"$(cat 
 echo -e "\x1B[38;2;17;245;120m#reservaremos 5 bloques de datos (3 escritos completos y 2 parciales)\x1b[0m"
 ./mi_escribir  disco /dir1/dir11/fic111 "$(cat texto2.txt)" 0
 echo
-echo -e "\x1B[38;2;17;245;120m$ ./mi_ls -l  disco /dir1/dir11/fic111 #eliminar comando si no se ha implementado mi_ls para ficheros\x1b[0m"
-./mi_ls -l disco /dir1/dir11/fic111 #eliminar comando si no se ha implementado mi_ls para ficheros
+#echo -e "\x1B[38;2;17;245;120m$ ./mi_ls -l  disco /dir1/dir11/fic111 #eliminar comando si no se ha implementado mi_ls para ficheros\x1b[0m"
+#./mi_ls -l disco /dir1/dir11/fic111 #eliminar comando si no se ha implementado mi_ls para ficheros
 echo
 echo -e "\x1B[38;2;17;245;120m$ ./leer_sf disco\x1b[0m"
 ./leer_sf disco
@@ -250,9 +250,9 @@ echo -e "\x1B[38;2;17;245;120m#camino2 NO ha de existir\x1b[0m"
 ./mi_link disco /dir1/dir11/fic113 /dir2/dir21/fic211 #camino2 NO ha de existir
 echo
 echo -e "\x1B[38;2;17;245;120m######################################################################\x1b[0m"
-echo -e "\x1B[38;2;17;245;120m$ ./mi_rmdir disco /dir2/dir21/ #o mi_rm\x1b[0m"
+echo -e "\x1B[38;2;17;245;120m$ ./mi_rm disco /dir2/dir21/ #o mi_rm\x1b[0m"
 echo -e "\x1B[38;2;17;245;120m#Error: El directorio /dir2/dir21/ no está vacío\x1b[0m"
-./mi_rmdir disco /dir2/dir21/ 
+./mi_rm disco /dir2/dir21/ 
 echo
 echo -e "\x1B[38;2;17;245;120m$ ./mi_rm disco /dir2/dir21/fic211\x1b[0m"
 ./mi_rm disco /dir2/dir21/fic211
@@ -272,8 +272,8 @@ echo
 echo -e "\x1B[38;2;17;245;120m$ ./mi_rm disco /dir2/dir21/fic211 #ya no existe\x1b[0m"
 ./mi_rm disco /dir2/dir21/fic211
 echo
-echo -e "\x1B[38;2;17;245;120m$ ./mi_rmdir disco /dir2/dir21/ #o mi_rm\x1b[0m"
-./mi_rmdir disco /dir2/dir21/
+echo -e "\x1B[38;2;17;245;120m$ ./mi_rm disco /dir2/dir21/ #o mi_rm\x1b[0m"
+./mi_rm disco /dir2/dir21/
 echo
 echo -e "\x1B[38;2;17;245;120m$ ./mi_ls -l disco /dir2/\x1b[0m"
 ./mi_ls -l disco /dir2/
@@ -328,8 +328,8 @@ echo -e "\x1B[38;2;17;245;120m$ ./mi_ls disco /dir3/\x1b[0m"
 echo
 echo -e "\x1B[38;2;17;245;120m######################################################################\x1b[0m"
 echo -e "\x1B[38;2;17;245;120mEliminamos el subdirectorio sd3 de dir3\x1b[0m"
-echo -e "\x1B[38;2;17;245;120m$ ./mi_rmdir disco /dir3/sd3/\x1b[0m"
-./mi_rmdir disco /dir3/sd3/
+echo -e "\x1B[38;2;17;245;120m$ ./mi_rm disco /dir3/sd3/\x1b[0m"
+./mi_rm disco /dir3/sd3/
 echo
 echo -e "\x1B[38;2;17;245;120m"
 echo "             /"
