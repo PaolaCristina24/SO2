@@ -1,7 +1,7 @@
 #include "ficheros.h"
 
 int main(int argc, char *argv[]) {
-    // 1. Comprobación de argumentos
+    // 1. Comprobacion de argumentos y lectura de parámetros
     if (argc < 4) {
         fprintf(stderr, "Error de sintaxis: ./escribir <nombre_dispositivo> <\"$(cat fichero)\"> <diferentes_inodos>\n");
         fprintf(stderr, "Offsets: 9000, 209000, 30725000, 409605000, 480000000\n");
