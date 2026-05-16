@@ -2,25 +2,34 @@
 
 int main(int argc, char **argv) {
 
-    //Comprobamos la sintaxis
+    // 1. Comprobamos la sintaxis (Corregido "Sintexis" por "Sintaxis")
     if (argc != 3) {
-        fprintf(stderr, RED "Sintexis incorrecta:./mi_rm disco /ruta\n" RESET);
+        fprintf(stderr, RED "Sintaxis: ./mi_rm <disco> <ruta>\n" RESET);
         return FALLO;
     }
 
+
+
+    // 2. Montamos el disco
     if (bmount(argv[1]) == FALLO) {
         perror("Error en bmount");
         return FALLO;
     }
 
-    //Ejecutamos unlink
-    if (mi_unlink(argv[2]) == FALLO) {
-        perror("Error en mi_unlink");
+    // 3. Ejecutamos mi_unlink y capturamos su código de error específico
+    int error = mi_unlink(argv[2]);
+    
+    if (error < 0) {
+        // En lugar de perror, usamos la función de la práctica para ver el error exacto
+        mostrar_error_buscar_entrada(error);
         bumount();
         return FALLO;
     }
 
-    bumount();
+    // 4. Desmontamos el disco
+    if (bumount() == FALLO) {
+        return FALLO;
+    }
 
     return EXITO;
 }

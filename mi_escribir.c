@@ -35,6 +35,7 @@ int main(int argc, char **argv) {
 
     // 4. Mostrar resultados
     printf("Bytes escritos: %d\n", escritos);
+    printf("longitud texto: %d\n", nbytes);
 
     // 5. Desmontar el dispositivo
     if (bumount() == FALLO) {
