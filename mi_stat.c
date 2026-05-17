@@ -49,13 +49,6 @@ int main(int argc, char **argv)
     int num_inodo;
     num_inodo = mi_stat(argv[2], &p_stat);
 
-    // Validamos si ha habido un error
-    if (num_inodo < 0) {
-        mostrar_error_buscar_entrada(num_inodo);
-        bumount();
-        return FALLO;
-    }
-
     // Mostrar datos
     printf("Nº de inodo: %d\n", num_inodo);
     printf("tipo: %c\n", p_stat.tipo);

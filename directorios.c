@@ -494,14 +494,26 @@ int mi_stat(const char *camino, struct STAT *p_stat)
     unsigned int p_entrada = 0;
 
     // Buscar la ruta
-    int error = buscar_entrada(camino, &p_inodo_dir, &p_inodo, &p_entrada,0, 0);
+    int error = buscar_entrada(camino,
+                               &p_inodo_dir,
+                               &p_inodo,
+                               &p_entrada,
+                               0,
+                               0);
 
-    if (error < 0) {
+    if (error < 0)
+    {
         return error;
     }
 
     // Obtener metadata del inodo
-    return mi_stat_f(p_inodo, p_stat);
+    if (mi_stat_f(p_inodo, p_stat) == FALLO)
+    {
+        return FALLO;
+    }
+
+    // IMPORTANTE: devolver el número de inodo
+    return (int)p_inodo;
 }
 
 //###############NIVEL 9 ################################
