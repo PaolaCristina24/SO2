@@ -511,8 +511,7 @@ int mi_stat(const char *camino, struct STAT *p_stat)
     {
         return FALLO;
     }
-
-    // IMPORTANTE: devolver el número de inodo
+  //RETURN NUMERO INODO
     return (int)p_inodo;
 }
 
