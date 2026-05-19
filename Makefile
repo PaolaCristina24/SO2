@@ -4,8 +4,8 @@ LDFLAGS=-pthread
 
 # Solo los archivos que existen físicamente
 SOURCES=bloques.c mi_mkfs.c ficheros_basico.c ficheros.c leer_sf.c escribir.c leer.c permitir.c truncar.c directorios.c mi_mkdir.c mi_chmod.c mi_stat.c mi_ls.c mi_touch.c mi_escribir.c mi_cat.c mi_rm.c mi_link.c
-LIBRARIES=bloques.o ficheros_basico.o ficheros.o directorios.o 
-INCLUDES=bloques.h ficheros_basico.h ficheros.h directorios.h
+LIBRARIES=bloques.o semaforo_mutex_posix.o ficheros_basico.o ficheros.o directorios.o 
+INCLUDES=bloques.h semaforo_mutex_posix.h ficheros_basico.h ficheros.h directorios.h
 PROGRAMS=mi_mkfs leer_sf escribir leer permitir truncar mi_mkdir mi_chmod mi_stat mi_ls mi_touch mi_escribir mi_cat mi_rm mi_link
 OBJS=$(SOURCES:.c=.o)
 
