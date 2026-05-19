@@ -21,7 +21,7 @@ int main(int argc, char **argv) {
 
     // 3. Llamar a mi_write (capa de directorios)
     // mi_write ya se encarga de buscar el inodo, gestionar la caché y llamar a mi_write_f
-    printf("Escribiendo %d bytes en %s con offset %u...\n", nbytes, ruta, offset);
+    //printf("Escribiendo %d bytes en %s con offset %u...\n", nbytes, ruta, offset);
     
     int escritos = mi_write(ruta, texto, offset, nbytes);
 

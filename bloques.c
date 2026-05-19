@@ -5,7 +5,10 @@
  * @author Yassin EL Gharsa
  */
 #include "bloques.h"
+#include "semaforo_mutex_posix.h"
 
+static sem_t *mutex;
+static unsigned int inside_sc = 0; 
 //Variable que indica el descriptor del dispositivo virtual
 static int descriptor = 0; 
 
@@ -26,6 +29,14 @@ int bmount(const char *camino) {
         perror("Error en bmount"); 
         return FALLO;
     }
+
+    if (!mutex) {
+        mutex = initSem();
+
+        if (mutex == SEM_FAILED) {
+            return -1;
+        }
+    }
     
     return descriptor;
 }
@@ -43,6 +54,8 @@ int bumount() {
     //Marcamos el descriptor como no válido tras cerrarlo para evitar usos posteriores no intencionados
     descriptor = FALLO;
     
+    deleteSem();
+
     return EXITO; 
 }
 
@@ -104,4 +117,16 @@ int bread(unsigned int nbloque, void *buf) {
 
     // Devolvemos la cantidad de bytes leídos (debería ser BLOCKSIZE)
     return (int)bytes_leidos;
+}
+
+void mi_waitSem() {
+    if (!inside_sc) { // inside_sc==0, no se ha hecho ya un wait 
+       waitSem(mutex); 
+   } 
+   inside_sc++; 
+   
+}
+
+void mi_signalSem() {
+    signalSem(mutex);
 }

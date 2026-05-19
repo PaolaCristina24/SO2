@@ -786,17 +786,15 @@ int mi_link(const char *camino1,
 
     return EXITO;
 }
+
 int mi_unlink(const char *camino) {
 
     unsigned int p_inodo_dir, p_inodo, p_entrada;
     struct inodo inodo;
     struct entrada ultimaEntrada;
-    int error = buscar_entrada(camino, &p_inodo_dir, &p_inodo, &p_entrada, 0, 0);
+    int error = buscar_entrada(camino, &p_inodo_dir, &p_inodo, &p_entrada, 0, 4);
     //Buscamos la entrada
-    if (error < 0) {
-        mostrar_error_buscar_entrada(error);
-        return FALLO;
-    }
+    
 
     //Leemos el inodo
     if (leer_inodo(p_inodo, &inodo) == FALLO) {
@@ -854,5 +852,5 @@ int mi_unlink(const char *camino) {
         }
     }
 
-    return EXITO;
+    return error;
 }

@@ -21,7 +21,7 @@ int main(int argc, char const *argv[])
     if (argc != 4)
     {
         fprintf(stderr,
-                RED "Sintaxis: ./mi_mkdir <disco> <permisos> </ruta_directorio/>\n" RESET);
+                RED "Sintaxis: ./mi_mkdir <nombre_dispositivo> <permisos> </ruta_directorio/>\n" RESET);
         return FALLO;
     }
 
