@@ -1,33 +1,60 @@
 #include "directorios.h"
 
-int main(int argc, char **argv) {
+int main(int argc, char **argv)
+{
+    // =========================
+    // COMPROBAR SINTAXIS
+    // =========================
 
-    // 1. Comprobamos la sintaxis (Corregido "Sintexis" por "Sintaxis")
-    if (argc != 3) {
-        fprintf(stderr, RED "Sintaxis: ./mi_rm <disco> <ruta>\n" RESET);
+    if (argc != 3)
+    {
+        fprintf(stderr,
+                RED "Sintaxis: ./mi_rm <disco> </ruta>\n" RESET);
+
         return FALLO;
     }
 
+    // =========================
+    // NO BORRAR DIRECTORIO RAÍZ
+    // =========================
 
+    if (strcmp(argv[2], "/") == 0)
+    {
+        fprintf(stderr,
+                RED "No se puede borrar el directorio raíz\n" RESET);
 
-    // 2. Montamos el disco
-    if (bmount(argv[1]) == FALLO) {
+        return FALLO;
+    }
+
+    // =========================
+    // MONTAR DISCO
+    // =========================
+
+    if (bmount(argv[1]) == FALLO)
+    {
         perror("Error en bmount");
         return FALLO;
     }
 
-    // 3. Ejecutamos mi_unlink y capturamos su código de error específico
+    // =========================
+    // BORRAR ENTRADA
+    // =========================
+
     int error = mi_unlink(argv[2]);
-    
-    if (error < 0) {
-        // En lugar de perror, usamos la función de la práctica para ver el error exacto
+
+    if (error < 0)
+    {
         mostrar_error_buscar_entrada(error);
         bumount();
         return FALLO;
     }
 
-    // 4. Desmontamos el disco
-    if (bumount() == FALLO) {
+    // =========================
+    // DESMONTAR DISCO
+    // =========================
+
+    if (bumount() == FALLO)
+    {
         return FALLO;
     }
 

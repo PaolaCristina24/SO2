@@ -301,34 +301,44 @@ int mi_truncar_f(unsigned int ninodo, unsigned int nbytes)
 {
     struct inodo inodo;
 
-    // Leer inodo
+    // =========================
+    // LEER INODO
+    // =========================
+
     if (leer_inodo(ninodo, &inodo) == FALLO)
     {
         perror("Error leyendo inodo");
         return FALLO;
     }
 
-    // Comprobar permisos de escritura
+    // =========================
+    // COMPROBAR PERMISOS
+    // =========================
+
     if ((inodo.permisos & 2) != 2)
     {
-        fprintf(stderr, "Error: el inodo no tiene permisos de escritura\n");
+        fprintf(stderr,
+                "Error: el inodo no tiene permisos de escritura\n");
+
         return FALLO;
     }
 
-    // No se puede truncar a un tamaño mayor al fichero
+    // =========================
+    // COMPROBAR TAMAÑO
+    // =========================
+
     if (nbytes > inodo.tamEnBytesLog)
     {
-        fprintf(stderr, "Error: nbytes mayor que tamEnBytesLog\n");
+        fprintf(stderr,
+                "Error: nbytes mayor que tamEnBytesLog\n");
+
         return FALLO;
     }
 
-    // Si truncamos completamente el fichero lo liberamos
-    if (nbytes == 0)
-    {
-        return liberar_inodo(ninodo);
-    }
+    // =========================
+    // CALCULAR PRIMER BL
+    // =========================
 
-    // Calcular primer bloque lógico a liberar
     unsigned int primerBL;
 
     if (nbytes % BLOCKSIZE == 0)
@@ -337,11 +347,15 @@ int mi_truncar_f(unsigned int ninodo, unsigned int nbytes)
     }
     else
     {
-        primerBL = nbytes / BLOCKSIZE + 1; 
+        primerBL = nbytes / BLOCKSIZE + 1;
     }
 
-    // Liberar bloques
-    int bloquesLiberados = liberar_bloques_inodo(primerBL, &inodo);
+    // =========================
+    // LIBERAR BLOQUES
+    // =========================
+
+    int bloquesLiberados =
+        liberar_bloques_inodo(primerBL, &inodo);
 
     if (bloquesLiberados == FALLO)
     {
@@ -349,15 +363,23 @@ int mi_truncar_f(unsigned int ninodo, unsigned int nbytes)
         return FALLO;
     }
 
-    // Actualizar metadatos
+    // =========================
+    // ACTUALIZAR METADATOS
+    // =========================
+
     inodo.tamEnBytesLog = nbytes;
+
     inodo.numBloquesOcupados -= bloquesLiberados;
 
     time_t ahora = time(NULL);
+
     inodo.mtime = ahora;
     inodo.ctime = ahora;
 
-    // Guardar inodo actualizado
+    // =========================
+    // ESCRIBIR INODO
+    // =========================
+
     if (escribir_inodo(ninodo, &inodo) == FALLO)
     {
         perror("Error escribiendo inodo");

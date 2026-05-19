@@ -787,70 +787,129 @@ int mi_link(const char *camino1,
     return EXITO;
 }
 
-int mi_unlink(const char *camino) {
 
-    unsigned int p_inodo_dir, p_inodo, p_entrada;
+int mi_unlink(const char *camino)
+{
+    unsigned int p_inodo_dir = 0;
+    unsigned int p_inodo = 0;
+    unsigned int p_entrada = 0;
+
     struct inodo inodo;
     struct entrada ultimaEntrada;
-    int error = buscar_entrada(camino, &p_inodo_dir, &p_inodo, &p_entrada, 0, 4);
-    //Buscamos la entrada
-    
 
-    //Leemos el inodo
-    if (leer_inodo(p_inodo, &inodo) == FALLO) {
+    // =========================
+    // BUSCAR ENTRADA
+    // =========================
+
+    int error = buscar_entrada(camino,
+                               &p_inodo_dir,
+                               &p_inodo,
+                               &p_entrada,
+                               0,
+                               0);
+
+    if (error < 0)
+    {
+        return error;
+    }
+
+    // =========================
+    // LEER INODO
+    // =========================
+
+    if (leer_inodo(p_inodo, &inodo) == FALLO)
+    {
         return FALLO;
     }
 
-    //Si es directorio tenemso que comprobar que esté vacío
-    if (inodo.tipo == 'd' && inodo.tamEnBytesLog > 0) {
-        fprintf(stderr, RED "El directorio %s no está vacío, no se puede borrar" RESET, camino);
+    // =========================
+    // SI ES DIRECTORIO:
+    // COMPROBAR QUE ESTÁ VACÍO
+    // =========================
+
+    if (inodo.tipo == 'd' &&
+        inodo.tamEnBytesLog > 0)
+    {
+        fprintf(stderr,
+                RED "El directorio no está vacío\n" RESET);
+
         return FALLO;
     }
 
-    // Leemos el inodo del directorio padre
+    // =========================
+    // LEER INODO DEL DIRECTORIO PADRE
+    // =========================
+
     struct inodo inodo_dir;
-    if (leer_inodo(p_inodo_dir, &inodo_dir) == FALLO) {
+
+    if (leer_inodo(p_inodo_dir, &inodo_dir) == FALLO)
+    {
         return FALLO;
     }
 
-    //Obtenemos el número total de entradas
-    int totalEntradas = inodo_dir.tamEnBytesLog / sizeof(struct entrada);
+    // Número total de entradas
+    int num_entradas =
+        inodo_dir.tamEnBytesLog / sizeof(struct entrada);
 
-    // Si no es la última, movemos la última
-    if (p_entrada != totalEntradas - 1) {
+    // =========================
+    // SI NO ES LA ÚLTIMA ENTRADA
+    // =========================
 
-        int offsetUltima = (totalEntradas - 1) * sizeof(struct entrada);
-
-        // Leemos la última entrada a borrar en memora
-        if (mi_read_f(p_inodo_dir, &ultimaEntrada, offsetUltima, sizeof(struct entrada)) == FALLO) {
+    if (p_entrada != (num_entradas - 1))
+    {
+        // Leer última entrada
+        if (mi_read_f(p_inodo_dir,
+                      &ultimaEntrada,
+                      (num_entradas - 1) * sizeof(struct entrada),
+                      sizeof(struct entrada)) == FALLO)
+        {
             return FALLO;
         }
 
-        //La escribimos en la posición de la que borramos
-        int offset = p_entrada * sizeof(struct entrada);
-        if (mi_write_f(p_inodo_dir, &ultimaEntrada, offset, sizeof(struct entrada)) == FALLO) {
+        // Escribirla en la posición borrada
+        if (mi_write_f(p_inodo_dir,
+                       &ultimaEntrada,
+                       p_entrada * sizeof(struct entrada),
+                       sizeof(struct entrada)) == FALLO)
+        {
             return FALLO;
         }
     }
 
-    //Reducimos eltamaño del directorio
-    if (mi_truncar_f(p_inodo_dir, (totalEntradas - 1) * sizeof(struct entrada)) == FALLO) {
+    // =========================
+    // TRUNCAR DIRECTORIO PADRE
+    // =========================
+
+    if (mi_truncar_f(p_inodo_dir,
+                     (num_entradas - 1) * sizeof(struct entrada)) == FALLO)
+    {
         return FALLO;
     }
-    //Reducimos los enlaces del inodo
+
+    // =========================
+    // ACTUALIZAR NLINKS
+    // =========================
+
     inodo.nlinks--;
 
-    //Si no quedan enlaces entonces liberamos el  inodo
-    if (inodo.nlinks == 0) {
-        if (liberar_inodo(p_inodo) == FALLO) {
+    if (inodo.nlinks == 0)
+    {
+        // Liberar inodo
+        if (liberar_inodo(p_inodo) == FALLO)
+        {
             return FALLO;
         }
-    } else {
+    }
+    else
+    {
+        // Actualizar ctime
         inodo.ctime = time(NULL);
-        if (escribir_inodo(p_inodo, &inodo) == FALLO) {
+
+        if (escribir_inodo(p_inodo, &inodo) == FALLO)
+        {
             return FALLO;
         }
     }
 
-    return error;
+    return EXITO;
 }
