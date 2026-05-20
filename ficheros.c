@@ -277,7 +277,7 @@ int mi_stat_f(unsigned int ninodo, struct STAT *p_stat)
 /*
  * Cambia los permisos de un fichero
  * @param ninodo: Número de inodo del fichero
- * @param permisos: Nuevos permisos a establecer
+ * @param permisos: Nuevos permisos a establecer 
  * @return: EXITO (0) o FALLO (-1) en caso de error
  */
 int mi_chmod_f(unsigned int ninodo, unsigned char permisos)

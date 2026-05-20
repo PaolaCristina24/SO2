@@ -2,7 +2,7 @@ CC=gcc
 CFLAGS=-c -g -Wall -std=gnu17
 LDFLAGS=-pthread
 
-# Solo los archivos que existen físicamente
+
 SOURCES=bloques.c mi_mkfs.c ficheros_basico.c ficheros.c leer_sf.c escribir.c leer.c permitir.c truncar.c directorios.c mi_mkdir.c mi_chmod.c mi_stat.c mi_ls.c mi_touch.c mi_escribir.c mi_cat.c mi_rm.c mi_link.c
 LIBRARIES=bloques.o semaforo_mutex_posix.o ficheros_basico.o ficheros.o directorios.o 
 INCLUDES=bloques.h semaforo_mutex_posix.h ficheros_basico.h ficheros.h directorios.h
