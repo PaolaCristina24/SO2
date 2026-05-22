@@ -1,7 +1,8 @@
 #include "semaforo_mutex_posix.h"
 #include <stdio.h>
 
-/* Ejemplo de creación e inicialización de semáforos POSIX para MUTEX con "semáforos con nombre" (named) */
+#define SEM_NAME "/mymutex" /* Usamos este nombre para el semáforo mutex */ 
+#define SEM_INIT_VALUE 1 /* Valor inicial de los mutex */ 
 
 
 sem_t *initSem() {

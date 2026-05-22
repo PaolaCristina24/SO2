@@ -1,6 +1,27 @@
 //Nivel 12 - Simulación de procesos
 #include "simulacion.h"
 
+/*
+ * Función enterrador.
+ * Recoge procesos hijos finalizados para evitar zombies.
+ */
+void reaper() {
+
+    pid_t ended;
+
+    // Recogemos todos los hijos terminados
+    while ((ended = waitpid(-1, NULL, WNOHANG)) > 0) {
+
+        acabados++;
+
+        fprintf(stderr,
+                "[Proceso padre: recogido hijo %d (%d/%d)]\n",
+                ended,
+                acabados,
+                NUMPROCESOS);
+    }
+}
+
 int main(int argc, char **argv)
 {
     if (argc != 2)
@@ -17,9 +38,10 @@ int main(int argc, char **argv)
         return FALLO;
     }
 
+    // Asociamos señal SIGCHLD al reaper
+    signal(SIGCHLD, reaper);
+
    // Creacion del directorio de simulacion con el timestamp actual
-
-
     time_t tiempo = time(NULL);
     struct tm *tm = localtime(&tiempo);
 
@@ -44,10 +66,10 @@ int main(int argc, char **argv)
     printf("Directorio simulacion: %s\n", rutaa);
 
     // Creacion de los 100 procesos 
-
+    pid_t pid;
     for (int i = 0; i < NUMERO_DE_PROCESOS; i++)
     {
-        pid_t pid = fork();
+        pid = fork();
 
         if (pid < 0)
         {

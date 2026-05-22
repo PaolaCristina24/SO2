@@ -54,7 +54,7 @@ int bumount() {
     //Marcamos el descriptor como no válido tras cerrarlo para evitar usos posteriores no intencionados
     descriptor = FALLO;
     
-    deleteSem();
+    deleteSem(mutex);
 
     return EXITO; 
 }

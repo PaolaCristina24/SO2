@@ -295,8 +295,10 @@ char leer_bit(unsigned int nbloque)
  * Reserva un bloque libre en el mapa de bits (MB) y lo marca como ocupado.
  * @return: Número de bloque reservado o FALLO (-1) en caso de error
  */
-int reservar_bloque()
-{
+int reservar_bloque(){
+
+    // Entramos en sección crítica para evitar condiciones de carrera
+    mi_waitSem();
 
     struct superbloque SB;
 
@@ -304,6 +306,7 @@ int reservar_bloque()
     if (bread(posSB, &SB) == FALLO)
     {
         perror("Error leyendo SB");
+        mi_signalSem();
         return FALLO;
     }
 
@@ -311,6 +314,7 @@ int reservar_bloque()
     //(Si no hay bloques libres, no podemos reservar ninguno)
     if (SB.cantBloquesLibres == 0)
     {
+        mi_signalSem();
         return FALLO;
     }
 
@@ -328,6 +332,7 @@ int reservar_bloque()
         if (bread(SB.posPrimerBloqueMB + nbloqueMB, bufferMB) == FALLO)
         {
             perror("Error leyendo bloque MB");
+            mi_signalSem();
             return FALLO;
         }
         // Compara bloque real del MB con el bloque auxiliar lleno de 1s. Si son iguales, significa que el bloque del MB no tiene ningún bit a 0 (libre) y seguimos buscando.
@@ -369,6 +374,7 @@ int reservar_bloque()
     // Marcamos el bloque como ocupado en el MB, poniendo el bit a 1
     if (escribir_bit(nbloque, 1) == FALLO)
     {
+        mi_signalSem();
         return FALLO;
     }
 
@@ -376,6 +382,7 @@ int reservar_bloque()
     SB.cantBloquesLibres--;
     if (bwrite(posSB, &SB) == FALLO)
     {
+        mi_signalSem();
         return FALLO;
     }
 
@@ -383,11 +390,12 @@ int reservar_bloque()
     unsigned char bufferDatos[BLOCKSIZE];
     memset(bufferDatos, 0, BLOCKSIZE);
 
-    if (bwrite(nbloque, bufferDatos) == FALLO)
-    {
+    if (bwrite(nbloque, bufferDatos) == FALLO){
+        mi_signalSem();
         return FALLO;
     }
-
+    // Salimos de la sección crítica
+    mi_signalSem();
     return nbloque;
 }
 
@@ -399,13 +407,15 @@ int reservar_bloque()
  */
 int liberar_bloque(unsigned int nbloque)
 {
-
+    // Entramos en sección crítica para evitar condiciones de carrera
+    mi_waitSem();
     struct superbloque SB;
 
     // Leemos el superbloque para obtener la información necesaria para liberar el bloque
     if (bread(posSB, &SB) == FALLO)
     {
         perror("Error leyendo SB en liberar_bloque");
+        mi_signalSem();
         return FALLO;
     }
 
@@ -413,6 +423,7 @@ int liberar_bloque(unsigned int nbloque)
     if (escribir_bit(nbloque, 0) == FALLO)
     {
         perror("Error escribiendo bit en liberar_bloque");
+        mi_signalSem();
         return FALLO;
     }
 
@@ -423,9 +434,13 @@ int liberar_bloque(unsigned int nbloque)
     if (bwrite(posSB, &SB) == FALLO)
     {
         perror("Error escribiendo SB en liberar_bloque");
+        mi_signalSem();
         return FALLO;
     }
     printf("Liberado bloque %d\n", nbloque);
+
+    // Salimos de sección crítica
+    mi_signalSem();
     // Devolvemos el número de bloque liberado
     return nbloque;
 }
@@ -519,8 +534,9 @@ int leer_inodo(unsigned int ninodo, struct inodo *inodo)
  *
  */
 
-int reservar_inodo(unsigned char tipo, unsigned char permisos)
-{
+int reservar_inodo(unsigned char tipo, unsigned char permisos){
+    // Entramos en sección crítica para evitar condiciones de carrera
+    mi_waitSem();
     struct superbloque SB;
     struct inodo inodo;
 
@@ -528,6 +544,7 @@ int reservar_inodo(unsigned char tipo, unsigned char permisos)
     if (bread(posSB, &SB) == FALLO)
     {
         perror("Error leyendo SB");
+        mi_signalSem();
         return FALLO;
     }
 
@@ -535,12 +552,14 @@ int reservar_inodo(unsigned char tipo, unsigned char permisos)
     if (SB.cantInodosLibres == 0)
     {
         fprintf(stderr, "No hay inodos libres\n");
+        mi_signalSem();
         return FALLO;
     }
 
     // Validación de tipo
     if (tipo != 'f' && tipo != 'd')
     {
+        mi_signalSem();
         return FALLO;
     }
 
@@ -550,20 +569,16 @@ int reservar_inodo(unsigned char tipo, unsigned char permisos)
     if (leer_inodo(posInodo, &inodo) == FALLO)
     {
         perror("Error leyendo inodo libre");
+        mi_signalSem();
         return FALLO;
     }
 
     // Actualizar superbloque (lista libre)
     SB.posPrimerInodoLibre = inodo.punterosDirectos[0];
     SB.cantInodosLibres--;
-
-    // ============================
-    // INICIALIZACIÓN CORRECTA
-    // ============================
-
     inodo.tipo = tipo;
 
-    // 🔥 CLAVE DEL TEST:
+
     // directorios SIEMPRE permisos 6
     if (tipo == 'd')
         inodo.permisos = 6;
@@ -587,6 +602,7 @@ int reservar_inodo(unsigned char tipo, unsigned char permisos)
     if (escribir_inodo(posInodo, &inodo) == FALLO)
     {
         perror("Error escribiendo inodo");
+        mi_signalSem();
         return FALLO;
     }
 
@@ -594,9 +610,12 @@ int reservar_inodo(unsigned char tipo, unsigned char permisos)
     if (bwrite(posSB, &SB) == FALLO)
     {
         perror("Error escribiendo SB");
+        mi_signalSem();
         return FALLO;
     }
 
+    // Salimos de la sección crítica
+    mi_signalSem();
     return posInodo;
 }
 
