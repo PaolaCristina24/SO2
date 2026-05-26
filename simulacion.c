@@ -1,147 +1,136 @@
-//Nivel 12 - Simulación de procesos
 #include "simulacion.h"
+#include "semaforo_mutex_posix.h"
 
-/*
- * Función enterrador.
- * Recoge procesos hijos finalizados para evitar zombies.
- */
+// Variable global real (compartida en este .c)
+int acabados = 0;
+
 void reaper() {
-
     pid_t ended;
-
-    // Recogemos todos los hijos terminados
+    signal(SIGCHLD, reaper); // Restablecer el manejador
     while ((ended = waitpid(-1, NULL, WNOHANG)) > 0) {
-
         acabados++;
-
-        fprintf(stderr,
-                "[Proceso padre: recogido hijo %d (%d/%d)]\n",
-                ended,
-                acabados,
-                NUMPROCESOS);
     }
 }
 
-int main(int argc, char **argv)
-{
-    if (argc != 2)
-    {
-        fprintf(stderr,
-                "Sintaxis: ./simulacion <disco>\n");
+int main(int argc, char **argv) {
+    if (argc != 2) {
+        fprintf(stderr, "Sintaxis: ./simulacion <disco>\n");
         return FALLO;
     }
 
-    // Montamos el disco con bmount
-    if (bmount(argv[1]) == FALLO)
-    {
-        perror("Error en el bmount");
+    // Montamos el dispositivo virtual (padre)
+    if (bmount(argv[1]) == FALLO) {
+        perror("Error en el bmount del padre");
         return FALLO;
     }
 
-    // Asociamos señal SIGCHLD al reaper
+    // Asociamos la señal SIGCHLD al enterrador
     signal(SIGCHLD, reaper);
 
-   // Creacion del directorio de simulacion con el timestamp actual
+    // Creación del directorio de simulación con timestamp
     time_t tiempo = time(NULL);
     struct tm *tm = localtime(&tiempo);
-
     char rutaa[100];
 
-    sprintf(rutaa,
-            "/simul_%04d%02d%02d%02d%02d%02d/",
-            tm->tm_year + 1900,
-            tm->tm_mon + 1,
-            tm->tm_mday,
-            tm->tm_hour,
-            tm->tm_min,
-            tm->tm_sec);
+    // Formato exacto: /simul_aaaammddhhmmss/
+    sprintf(rutaa, "/simul_%04d%02d%02d%02d%02d%02d/",
+            tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday,
+            tm->tm_hour, tm->tm_min, tm->tm_sec);
 
-    if (mi_creat(rutaa, 6) < 0)
-    {
+    if (mi_creat(rutaa, 6) < 0) {
         perror("Error creando directorio simulacion");
         bumount();
         return FALLO;
     }
 
-    printf("Directorio simulacion: %s\n", rutaa);
+    printf("*** SIMULACIÓN DE %d PROCESOS REALIZANDO CADA UNO %d ESCRITURAS ***\n", NUMPROCESOS, NUMESCRITURAS);
 
-    // Creacion de los 100 procesos 
-    pid_t pid;
-    for (int i = 0; i < NUMERO_DE_PROCESOS; i++)
-    {
-        pid = fork();
+    // Creación de los procesos hijos
+    for (int i = 1; i <= NUMPROCESOS; i++) {
+        pid_t pid = fork();
 
-        if (pid < 0)
-        {
+        if (pid < 0) {
             perror("Error en fork");
             break;
         }
 
-        // =========================
+        // =================================================================
         // PROCESO HIJO
-        // =========================
-
-        if (pid == 0)
-        {
-            // Montar disco en el hijo
-            if (bmount(argv[1]) == FALLO)
-            {
+        // =================================================================
+        if (pid == 0) {
+            // Cada hijo debe montar el dispositivo de forma independiente
+            if (bmount(argv[1]) == FALLO) {
                 perror("Error en bmount hijo");
                 exit(FALLO);
             }
 
-            char ruta_proceso[200];
-            char ruta_fichero[250];
+            char ruta_proceso[150];
+            char ruta_fichero[200];
+            pid_t mi_pid = getpid();
 
-            sprintf(ruta_proceso,
-                    "%sproceso_%d/",
-                    rutaa,
-                    getpid());
-
-            // Crear directorio proceso_PID
-            if (mi_creat(ruta_proceso, 6) < 0)
-            {
+            sprintf(ruta_proceso, "%sproceso_%d/", rutaa, mi_pid);
+            if (mi_creat(ruta_proceso, 6) < 0) {
                 perror("Error creando directorio del proceso");
                 bumount();
                 exit(FALLO);
             }
 
-            sprintf(ruta_fichero,
-                    "%sprueba.dat",
-                    ruta_proceso);
-
-            // Crear fichero prueba.dat
-            if (mi_creat(ruta_fichero, 6) < 0)
-            {
+            sprintf(ruta_fichero, "%sprueba.dat", ruta_proceso);
+            if (mi_creat(ruta_fichero, 6) < 0) {
                 perror("Error creando prueba.dat");
                 bumount();
                 exit(FALLO);
             }
 
-#if DEBUG12
-            fprintf(stderr,
-                    "[Proceso %d creado correctamente]\n",
-                    getpid());
-#endif
+            // Inicializar la semilla aleatoria única para este hijo
+            srand(time(NULL) + mi_pid);
 
+            // Bucle de escrituras que faltaba
+            for (int nescritura = 1; nescritura <= NUMESCRITURAS; nescritura++) {
+                struct REGISTRO registro;
+                registro.fecha = time(NULL);
+                registro.pid = mi_pid;
+                registro.nEscritura = nescritura;
+                registro.nRegistro = rand() % REGMAX;
+
+                // Escribir en la posición lógica correspondiente (offset en bytes)
+                int bytes_escritos = mi_write(ruta_fichero, &registro, 
+                                              registro.nRegistro * sizeof(struct REGISTRO), 
+                                              sizeof(struct REGISTRO));
+                
+                if (bytes_escritos < 0) {
+                    fprintf(stderr, "Error al escribir en el proceso %d\n", mi_pid);
+                }
+
+                // Esperar 0.05 segundos (50.000 microsegundos) entre escrituras
+                usleep(50000);
+            }
+
+            printf("[Proceso %d: Completadas %d escrituras en %s]\n", i, NUMESCRITURAS, ruta_fichero);
+
+            // Desmontar el dispositivo antes de salir
             bumount();
             exit(EXITO);
         }
 
-        // Espera de 0.15 segundos
-        usleep(150000);
+        // =================================================================
+        // PROCESO PADRE (Lanzador)
+        // =================================================================
+        // Esperar 0.15 segundos garantizados (controlando interrupciones por señales)
+        unsigned int tiempo_espera = 150000;
+        while (tiempo_espera > 0) {
+            tiempo_espera = usleep(tiempo_espera);
+            // Si usleep se interrumpe por SIGCHLD, devuelve el tiempo restante.
+            // El bucle continuará durmiendo lo que falte.
+        }
     }
 
-    // =========================
-    // ESPERAR HIJOS
-    // =========================
-
-    for (int i = 0; i < NUMERO_DE_PROCESOS; i++)
-    {
-        wait(NULL);
+    // El padre se duerme con pause() hasta que todos los hijos hayan sido recogidos por reaper
+    while (acabados < NUMPROCESOS) {
+        pause();
     }
-
+    extern sem_t *mutex;
+    // Desmontar el dispositivo (padre)
     bumount();
-
     return EXITO;
 }

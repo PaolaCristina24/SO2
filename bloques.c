@@ -20,6 +20,12 @@ static int descriptor = 0;
 int bmount(const char *camino) {
     //Llamamos a umask para asegurarnos de que los permisos se apliquen correctamente al crear el archivo
     umask(000);
+
+    // Si el proceso ya tenía un descriptor abierto (por ejemplo, tras el fork), lo cerramos
+    if (descriptor > 0) {
+        close(descriptor);
+    }
+
     // Abrimos con lectura/escritura y creación si no existe
     // Los permisos 0666 significan rw-rw-rw-
     descriptor = open(camino, O_RDWR | O_CREAT, 0666);
@@ -30,14 +36,17 @@ int bmount(const char *camino) {
         return FALLO;
     }
 
-    if (!mutex) {
-        mutex = initSem();
-
-        if (mutex == SEM_FAILED) {
-            return -1;
-        }
+    // El semáforo POSIX se enlaza siempre. initSem() usa sem_open(),
+    // el cual incrementa el contador de referencias del semáforo en el kernel de forma segura.
+    mutex = initSem();
+    if (mutex == SEM_FAILED) {
+        perror("Error al inicializar el semáforo en bmount");
+        return -1;
     }
     
+    // Forzamos a que tras un bmount nuevo (como el de cada hijo), el contador local empiece a 0
+    inside_sc = 0;
+
     return descriptor;
 }
 /**
@@ -45,6 +54,11 @@ int bmount(const char *camino) {
  * @return EXITO en caso de éxito o FALLO en caso de error
  */
 int bumount() {
+
+    if (descriptor == FALLO) {
+        return FALLO;
+    }  
+
     //Cerraramos el descriptor actual
     if (close(descriptor) == FALLO) {
         perror("Error en bumount");
@@ -54,7 +68,6 @@ int bumount() {
     //Marcamos el descriptor como no válido tras cerrarlo para evitar usos posteriores no intencionados
     descriptor = FALLO;
     
-    deleteSem(mutex);
 
     return EXITO; 
 }
@@ -120,13 +133,15 @@ int bread(unsigned int nbloque, void *buf) {
 }
 
 void mi_waitSem() {
-    if (!inside_sc) { // inside_sc==0, no se ha hecho ya un wait 
+   if (!inside_sc) { // inside_sc == 0, nadie en este proceso ha cerrado el cerrojo aún
        waitSem(mutex); 
    } 
    inside_sc++; 
-   
 }
 
 void mi_signalSem() {
-    signalSem(mutex);
+   inside_sc--; 
+   if (!inside_sc) { // Solo cuando el contador llega a 0, liberamos el cerrojo para el resto de procesos
+       signalSem(mutex);
+   }
 }
