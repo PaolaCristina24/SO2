@@ -30,10 +30,13 @@ int bmount(const char *camino) {
         return FALLO;
     }
 
-    mutex = initSem();
-    if (mutex == NULL || mutex == SEM_FAILED) {
-        fprintf(stderr, "Error en bmount: No se pudo enlazar el semáforo mutex.\n");
-        return FALLO;
+    if (!mutex) {
+        mutex = initSem();
+
+        if (mutex == SEM_FAILED) {
+            fprintf(stderr, "Error en bmount: No se pudo enlazar el semáforo mutex.\n");
+            return -1;
+        }
     }
     
     return descriptor;
@@ -54,7 +57,6 @@ int bumount() {
     // USAMOS LA FUNCIÓN REAL DE TU LIBRERÍA DE SEMÁFOROS
     // Si tu función destruirSem() cierra el semáforo global, la llamamos aquí:
     destruirSem(); 
-    mutex = NULL; 
 
     return EXITO; 
 }

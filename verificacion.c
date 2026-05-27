@@ -33,9 +33,9 @@ int main(int argc, char **argv)
     printf("dir_sim: %s\n", argv[2]);
     printf("numentradas: %d NUMPROCESOS: %d\n",
            numentradas,
-           NUMERO_DE_PROCESOS);
+           NUMPROCESOS);
 
-    if (numentradas != NUMERO_DE_PROCESOS)
+    if (numentradas != NUMPROCESOS)
     {
         fprintf(stderr,
                 "Error: número de entradas incorrecto\n");
@@ -61,7 +61,7 @@ int main(int argc, char **argv)
 
 
     // LEER ENTRADAS DEL DIRECTORIO
-    struct entrada entradas[NUMERO_DE_PROCESOS];
+    struct entrada entradas[NUMPROCESOS];
 
     if (mi_read(argv[2],
                 entradas,
@@ -75,7 +75,7 @@ int main(int argc, char **argv)
     }
 
     // RECORRER CADA PROCESO
-    for (int i = 0; i < NUMERO_DE_PROCESOS; i++)
+    for (int i = 0; i < NUMPROCESOS; i++)
     {
         struct INFORMACION info;
 

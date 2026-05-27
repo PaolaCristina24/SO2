@@ -563,7 +563,7 @@ int mi_stat(const char *camino, struct STAT *p_stat)
 
 int mi_write(const char *camino, const void *buf, unsigned int offset, unsigned int nbytes) 
 {
-    mi_waitSem();
+
 
     unsigned int p_inodo_dir = 0, p_inodo = 0, p_entrada = 0;
     int encontrado = -1;
@@ -625,7 +625,6 @@ int mi_write(const char *camino, const void *buf, unsigned int offset, unsigned 
     resultado = mi_write_f(p_inodo, buf, offset, nbytes);
 
 salida_write:
-    mi_signalSem();
     return resultado;
 }
 
