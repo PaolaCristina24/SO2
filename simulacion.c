@@ -1,6 +1,11 @@
 #include "simulacion.h"
+#include "semaforo_mutex_posix.h"
 
+<<<<<<< HEAD
 // Variable global real 
+=======
+// Variable global real (compartida en este .c)
+>>>>>>> e0b6e2efe9cd3724ad05310f5b6e8546095aa133
 int acabados = 0;
 
 void reaper() {
@@ -112,9 +117,13 @@ int main(int argc, char **argv) {
             exit(EXITO);
         }
 
+<<<<<<< HEAD
         // =================================================================
         // PROCESO PADRE (Lanzador)
         // =================================================================
+=======
+       
+>>>>>>> e0b6e2efe9cd3724ad05310f5b6e8546095aa133
         // Esperar 0.15 segundos garantizados (controlando interrupciones por señales)
         unsigned int tiempo_espera = 150000;
         while (tiempo_espera > 0) {
@@ -125,6 +134,7 @@ int main(int argc, char **argv) {
     }
 
     // El padre se duerme con pause() hasta que todos los hijos hayan sido recogidos por reaper
+<<<<<<< HEAD
    while (acabados < NUMPROCESOS) {
         pause();
     }
@@ -136,5 +146,13 @@ int main(int argc, char **argv) {
     destruirSem(); 
 
     printf("Simulación completada con éxito.\n");
+=======
+    while (acabados < NUMPROCESOS) {
+        pause();
+    }
+    extern sem_t *mutex;
+    // Desmontar el dispositivo (padre)
+    bumount();
+>>>>>>> e0b6e2efe9cd3724ad05310f5b6e8546095aa133
     return EXITO;
 }
