@@ -5,34 +5,24 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/wait.h>
-
 #include <time.h>
 #include <string.h>
+#include <signal.h>
 
-#define NUMERO_DE_PROCESOS 100
+#define NUMPROCESOS 100
+#define NUMESCRITURAS 50
+#define REGMAX 500000
 
-/*
- * Estructura que representa un registro de escritura
- * realizado por un proceso hijo.
- */ 
 struct REGISTRO {
-    time_t fecha;       // Fecha de la escritura
-    pid_t pid;          // PID del proceso
-    int nEscritura;     // Número de escritura 
-    int nRegistro;      // Posición aleatoria dentro del fichero
+    time_t fecha;       // Fecha de la escritura (segundos)
+    pid_t pid;          // PID del proceso creador
+    int nEscritura;     // Nº de escritura (de 1 a 50)
+    int nRegistro;      // Nº de registro aleatorio [0..REGMAX-1]
 };
 
-// Variable global para contar procesos acabados
-static int acabados = 0;
-
-/*
- * Función enterrador.
- * Recoge procesos hijos finalizados para evitar zombies.
- */
 void reaper();
 
 #endif

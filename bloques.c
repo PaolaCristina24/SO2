@@ -45,6 +45,7 @@ int bmount(const char *camino) {
  * @return EXITO en caso de éxito o FALLO en caso de error
  */
 int bumount() {
+    if (descriptor == FALLO) return FALLO;
     //Cerraramos el descriptor actual
     if (close(descriptor) == FALLO) {
         perror("Error en bumount");

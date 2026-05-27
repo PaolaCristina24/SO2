@@ -347,113 +347,118 @@ int mi_creat(const char *camino, unsigned char permisos)
  * @param buffer El buffer donde se guardarán los nombres de las entradas
  * @return El número de entradas listadas o un código de error negativo si no se ha podido listar
  */
-int mi_dir(const char *camino, char *buffer)
+int mi_dir(const char *camino, char *buffer, char tipo, char flag)
 {
     unsigned int p_inodo_dir = 0;
     unsigned int p_inodo = 0;
     unsigned int p_entrada = 0;
-    char tamBytes[16];
     struct inodo inodo;
     struct entrada entrada;
+    char tmp[512];
 
     buffer[0] = '\0';
 
-    // Buscar ruta
+    // 1. Buscar la entrada correspondiente al camino
     int error = buscar_entrada(camino, &p_inodo_dir, &p_inodo, &p_entrada, 0, 0);
+    if (error < 0) return error;
 
-    if (error < 0)
-        return error;
+    // 2. Leer el inodo del elemento solicitado
+    if (leer_inodo(p_inodo, &inodo) == FALLO) return FALLO;
 
-    // Leer inodo encontrado
-    if (leer_inodo(p_inodo, &inodo) == FALLO)
-    {
-        return FALLO;
-    }
-    if (inodo.tipo != 'd')
-    {
-        return FALLO;
+    // 3. Validación de sintaxis: Comprobar que el tipo de inodo coincide con la ruta
+    if (inodo.tipo != tipo) {
+        return -10; // Error de concordancia de sintaxis capturado en mi_ls.c
     }
 
-    // Comprobar permiso lectura
-    if ((inodo.permisos & 4) != 4)
-    {
+    // 4. Comprobar permisos de lectura
+    if ((inodo.permisos & 4) != 4) {
         return ERROR_PERMISO_LECTURA;
     }
 
-    // Número de entradas
+    // Definición de colores ANSI (¡Solo afectarán al nombre!)
+    #define COLOR_DIR   "\033[33m"  // Naranja / Amarillo para directorios
+    #define COLOR_FIC   "\033[36m"  // Cian para ficheros
+    #define COLOR_RESET "\033[0m"   // Blanco estándar
+
+    // =========================================================================
+    // CASO A: LA RUTA ES UN FICHERO INDIVIDUAL
+    // =========================================================================
+    if (inodo.tipo == 'f') {
+        const char *nombre_fichero = strrchr(camino, '/') ? strrchr(camino, '/') + 1 : camino;
+
+        if (flag == 'l') { // Modo extendido
+            struct tm *tm;
+            tm = localtime(&inodo.mtime);
+            
+            // Construimos los metadatos base
+            sprintf(buffer, "%c\t", inodo.tipo);
+            strcat(buffer, (inodo.permisos & 4) ? "r" : "-");
+            strcat(buffer, (inodo.permisos & 2) ? "w" : "-");
+            strcat(buffer, (inodo.permisos & 1) ? "x" : "-");
+            
+            // Construcción del tiempo manual solicitada en el guion
+            sprintf(tmp, "\t%d-%02d-%02d %02d:%02d:%02d", 
+                    tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday, 
+                    tm->tm_hour, tm->tm_min, tm->tm_sec);
+            strcat(buffer, tmp);
+
+            // Tamaño y Nombre con color
+            sprintf(tmp, "\t%d\t%s%s%s\n", inodo.tamEnBytesLog, COLOR_FIC, nombre_fichero, COLOR_RESET);
+            strcat(buffer, tmp);
+        } else {
+            // Modo simple: solo nombre coloreado
+            sprintf(buffer, "%s%s%s\n", COLOR_FIC, nombre_fichero, COLOR_RESET);
+        }
+        return 1;
+    }
+
+    // =========================================================================
+    // CASO B: LA RUTA ES UN DIRECTORIO (Recorrer entradas)
+    // =========================================================================
     int nentradas = inodo.tamEnBytesLog / sizeof(struct entrada);
 
-    // Recorrer entradas
     for (int i = 0; i < nentradas; i++)
     {
-
-        if (mi_read_f(p_inodo, &entrada, i * sizeof(struct entrada), sizeof(struct entrada)) == FALLO)
-        {
+        if (mi_read_f(p_inodo, &entrada, i * sizeof(struct entrada), sizeof(struct entrada)) == FALLO) {
             return FALLO;
         }
         
-        // Leer inodo de la entrada
         struct inodo inodo_entrada;
-        if (leer_inodo(entrada.ninodo, &inodo_entrada) == FALLO)
-        {
+        if (leer_inodo(entrada.ninodo, &inodo_entrada) == FALLO) {
             return FALLO;
         }
-        
-        if (inodo_entrada.tipo == 'd')
-        {
-            strcat(buffer, GREEN);
-        }
-        else
-        {
-            strcat(buffer, CYAN);
+
+        // Asignamos el color dependiendo de lo que sea la entrada hija
+        char color_nombre[16];
+        if (inodo_entrada.tipo == 'd') {
+            strcpy(color_nombre, COLOR_DIR);
+        } else {
+            strcpy(color_nombre, COLOR_FIC);
         }
 
-        // Para cada entrada concatenamos su nombre al buffer e incorporamos la información del inodo
-        char tipo_str[2];
-        sprintf(tipo_str, "%c", inodo_entrada.tipo);
-        strcat(buffer, tipo_str);
-        strcat(buffer, "\t\t");
+        if (flag == 'l') { // Modo extendido para directorios
+            struct tm *tm;
+            tm = localtime(&inodo_entrada.mtime);
+            
+            sprintf(tmp, "%c\t", inodo_entrada.tipo);
+            strcat(buffer, tmp);
+            
+            strcat(buffer, (inodo_entrada.permisos & 4) ? "r" : "-");
+            strcat(buffer, (inodo_entrada.permisos & 2) ? "w" : "-");
+            strcat(buffer, (inodo_entrada.permisos & 1) ? "x" : "-");
+            
+            sprintf(tmp, "\t%d-%02d-%02d %02d:%02d:%02d", 
+                    tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday, 
+                    tm->tm_hour, tm->tm_min, tm->tm_sec);
+            strcat(buffer, tmp);
 
-        if ((inodo_entrada.permisos & 4) == 4)
-        {
-            strcat(buffer, "r");
+            sprintf(tmp, "\t%d\t%s%s%s\n", inodo_entrada.tamEnBytesLog, color_nombre, entrada.nombre, COLOR_RESET);
+            strcat(buffer, tmp);
+        } else {
+            // Modo simple para directorios: exclusivamente los nombres coloreados con su salto de línea
+            sprintf(tmp, "%s%s%s\n", color_nombre, entrada.nombre, COLOR_RESET);
+            strcat(buffer, tmp);
         }
-        else
-        {
-            strcat(buffer, "-");
-        }
-
-        if ((inodo_entrada.permisos & 2) == 2)
-        {
-            strcat(buffer, "w");
-        }
-        else
-        {
-            strcat(buffer, "-");
-        }
-
-        if ((inodo_entrada.permisos & 1) == 1)
-        {
-            strcat(buffer, "x");
-        }
-        else
-        {
-            strcat(buffer, "-");
-        }
-
-        strcat(buffer, "\t");
-
-        struct tm *ts;
-        char mtime[80];
-        ts = localtime(&inodo_entrada.mtime);
-        strftime(mtime, sizeof(mtime), "%a %Y-%m-%d %H:%M:%S", ts);
-        strcat(buffer, mtime);
-        sprintf(tamBytes, "\t\t%d", inodo_entrada.tamEnBytesLog);
-        strcat(buffer, tamBytes);
-        strcat(buffer, "\t\t");
-        strcat(buffer, entrada.nombre);
-        strcat(buffer, RESET);
-        strcat(buffer, "\n");
     }
 
     return nentradas;
@@ -910,6 +915,297 @@ int mi_unlink(const char *camino)
             return FALLO;
         }
     }
+
+    return EXITO;
+} 
+
+    // =========================
+    // MEJORAS NIVEL 10
+    // =========================
+int mi_rn(const char *camino_antiguo, const char *nombre_nuevo) {
+    // Validación de la misma sintaxis
+    int len_antiguo = strlen(camino_antiguo);
+    int len_nuevo = strlen(nombre_nuevo);
+    
+    int antiguo_es_dir = (camino_antiguo[len_antiguo - 1] == '/');
+    int nuevo_es_dir = (nombre_nuevo[len_nuevo - 1] == '/');
+    
+    if (antiguo_es_dir != nuevo_es_dir) {
+        fprintf(stderr, "Error: antiguo y nuevo han de ser del mismo tipo (ambos ficheros o ambos directorios).\n");//
+        return FALLO;
+    }
+
+    // Aisla la ruta del camino padre y el nuevo nombre
+    char camino_padre[512];
+    char nombre_antiguo[60];
+    memset(camino_padre, 0, sizeof(camino_padre));
+    memset(nombre_antiguo, 0, sizeof(nombre_antiguo));
+
+    // Busca la última barra que separa el directorio padre de la entrada
+    // Si es un directorio la / no importa y se busca la penúltima
+    char *ultima_barra = strrchr(camino_antiguo, '/');
+    if (antiguo_es_dir) {
+        // Temporalmente truncamos la barra final para encontrar la barra que separa al padre
+        char copia_camino[512];
+        strcpy(copia_camino, camino_antiguo);
+        copia_camino[len_antiguo - 1] = '\0';
+        ultima_barra = strrchr(copia_camino, '/');
+        
+        strncpy(camino_padre, camino_antiguo, (ultima_barra - copia_camino) + 1);
+        strcpy(nombre_antiguo, ultima_barra + 1);
+        // Le devolvemos la barra al nombre antiguo porque es un directorio
+        strcat(nombre_antiguo, "/");
+    } else {
+        strncpy(camino_padre, camino_antiguo, (ultima_barra - camino_antiguo) + 1);
+        strcpy(nombre_antiguo, ultima_barra + 1);
+    }
+
+    // Se construye el camino completo nuevo para verificar que NO exista ya 
+    //En esta parte tuve ayuda de gemini porque no se me ocurrio verificarlo y los test me daban error
+    char camino_nuevo_completo[512];
+    sprintf(camino_nuevo_completo, "%s%s", camino_padre, nombre_nuevo);
+
+    unsigned int p_inodo_dir_tmp = 0, p_inodo_tmp = 0, p_entrada_tmp = 0;
+    // Se busca con reservar = 0. Si buscar_entrada devuelve >= 0, significa que el nombre NUEVO ya existe.
+    if (buscar_entrada(camino_nuevo_completo, &p_inodo_dir_tmp, &p_inodo_tmp, &p_entrada_tmp, 0, 0) >= 0) {
+        fprintf(stderr, "Error: El nombre nuevo '%s' ya existe en este directorio.\n", nombre_nuevo);
+        return FALLO; 
+    }
+
+    // Para proteger la modificación usé la exclusión mutua
+    mi_waitSem();
+
+    // Buscamos la entrada del antiguo para obtener el inodo del padre (p_inodo_dir) y el nº de entrada (p_entrada)
+    unsigned int p_inodo_dir = 0, p_inodo_antiguo = 0, p_entrada_antiguo = 0;
+    int error = buscar_entrada(camino_antiguo, &p_inodo_dir, &p_inodo_antiguo, &p_entrada_antiguo, 0, 0);
+    if (error < 0) {
+        mi_signalSem();
+        return error; // Error: No existe el fichero/directorio antiguo
+    }
+
+    // Se la entrada directamente desde el inodo del padre
+    struct entrada entrada_padre;
+    int offset = p_entrada_antiguo * sizeof(struct entrada);
+    
+    if (mi_read_f(p_inodo_dir, &entrada_padre, offset, sizeof(struct entrada)) == FALLO) {
+        mi_signalSem();
+        return FALLO;
+    }
+
+    // Limpiamos el nombre antiguo y copiamos el nuevo (sin /'si es un directorio, se almacena solo el texto plano)
+    memset(entrada_padre.nombre, 0, sizeof(entrada_padre.nombre));
+    
+    if (nuevo_es_dir) {
+        // Se copia quitando la / final 
+        strncpy(entrada_padre.nombre, nombre_nuevo, len_nuevo - 1);
+    } else {
+        strcpy(entrada_padre.nombre, nombre_nuevo);
+    }
+
+    //Escribir la entrada modificada de vuelta al disco
+    if (mi_write_f(p_inodo_dir, &entrada_padre, offset, sizeof(struct entrada)) == FALLO) {
+        mi_signalSem();
+        return FALLO;
+    }
+
+    //Liberar el semáforo
+    mi_signalSem();
+    return EXITO;
+}    
+int mi_mv(const char *camino_origen, const char *camino_destino)
+{
+    unsigned int p_inodo_dir_orig = 0;
+    unsigned int p_inodo_orig = 0;
+    unsigned int p_entrada_orig = 0;
+
+    struct inodo inodo_orig;
+
+    // =========================================================================
+    // COMPROBAR SINTAXIS DEL DESTINO (Debe ser un directorio terminado en '/')
+    // =========================================================================
+
+    int len_des = strlen(camino_destino);
+    if (camino_destino[len_des - 1] != '/')
+    {
+        fprintf(stderr, "Error: El camino de destino debe ser un directorio (acabado en '/').\n");
+        return FALLO;
+    }
+
+    // =========================================================================
+    // BUSCAR ELEMENTO EN ORIGEN
+    // =========================================================================
+
+    int error = buscar_entrada(camino_origen,
+                               &p_inodo_dir_orig,
+                               &p_inodo_orig,
+                               &p_entrada_orig,
+                               0,
+                               0);
+
+    if (error < 0)
+    {
+        return error; // Error: No existe el origen
+    }
+
+    // =========================================================================
+    // LEER INODO ORIGINAL Y COMPROBAR PERMISOS
+    // =========================================================================
+
+    if (leer_inodo(p_inodo_orig, &inodo_orig) == FALLO)
+    {
+        return FALLO;
+    }
+
+    if ((inodo_orig.permisos & 4) != 4)
+    {
+        return ERROR_PERMISO_LECTURA;
+    }
+
+    // =========================================================================
+    // EXTRAER EL NOMBRE LIMPIO DEL ELEMENTO A MOVER
+    // =========================================================================
+
+    char nombre_elemento[60];
+    memset(nombre_elemento, 0, sizeof(nombre_elemento));
+
+    int len_ori = strlen(camino_origen);
+    int origen_es_dir = (camino_origen[len_ori - 1] == '/');
+
+    char *ultima_barra = strrchr(camino_origen, '/');
+    if (origen_es_dir)
+    {
+        // Si es directorio, ignoramos la barra final para extraer el nombre
+        char copia_origen[512];
+        strcpy(copia_origen, camino_origen);
+        copia_origen[len_ori - 1] = '\0';
+        ultima_barra = strrchr(copia_origen, '/');
+        strcpy(nombre_elemento, ultima_barra + 1);
+        strcat(nombre_elemento, "/"); // Le devolvemos la barra de formato
+    }
+    else
+    {
+        strcpy(nombre_elemento, ultima_barra + 1);
+    }
+
+    // =========================================================================
+    // CONSTRUIR RUTA COMPLETA EN DESTINO Y COMPROBAR QUE NO EXISTA YA
+    // =========================================================================
+
+    char camino_destino_completo[512];
+    sprintf(camino_destino_completo, "%s%s", camino_destino, nombre_elemento);
+
+    unsigned int p_inodo_dir_tmp = 0;
+    unsigned int p_inodo_tmp = 0;
+    unsigned int p_entrada_tmp = 0;
+
+    // Buscamos con reservar = 0. Si devuelve >= 0, es que ya existe un duplicado en destino
+    if (buscar_entrada(camino_destino_completo,
+                       &p_inodo_dir_tmp,
+                       &p_inodo_tmp,
+                       &p_entrada_tmp,
+                       0,
+                       0) >= 0)
+    {
+        fprintf(stderr, "Error: El elemento '%s' ya existe en el directorio destino.\n", nombre_elemento);
+        return FALLO;
+    }
+
+    // =========================================================================
+    //  CREA ENTRADA EN DESTINO Y ELIMINAR EN ORIGEN
+    // =========================================================================
+
+    mi_waitSem();
+
+    // 1. Crear la nueva entrada en el directorio de destino (reservar = 1)
+    unsigned int p_inodo_dir_dest = 0;
+    unsigned int p_inodo_dest_nuevo = 0;
+    unsigned int p_entrada_dest_nueva = 0;
+
+    error = buscar_entrada(camino_destino_completo,
+                           &p_inodo_dir_dest,
+                           &p_inodo_dest_nuevo,
+                           &p_entrada_dest_nueva,
+                           1, // Reservamos la entrada
+                           inodo_orig.permisos);
+
+    if (error < 0)
+    {
+        mi_signalSem();
+        return error;
+    }
+
+    // 2. Leer la entrada recién creada en el destino
+    struct entrada entrada_dest;
+    if (mi_read_f(p_inodo_dir_dest,
+                  &entrada_dest,
+                  p_entrada_dest_nueva * sizeof(struct entrada),
+                  sizeof(struct entrada)) == FALLO)
+    {
+        mi_signalSem();
+        return FALLO;
+    }
+
+    // 3. Asociar la entrada del destino al inodo original (como en mi_link)
+    entrada_dest.ninodo = p_inodo_orig;
+    if (mi_write_f(p_inodo_dir_dest,
+                   &entrada_dest,
+                   p_entrada_dest_nueva * sizeof(struct entrada),
+                   sizeof(struct entrada)) == FALLO)
+    {
+        mi_signalSem();
+        return FALLO;
+    }
+
+    // 4. Liberar el inodo ficticio que creó buscar_entrada automáticamente
+    if (liberar_inodo(p_inodo_dest_nuevo) == FALLO)
+    {
+        mi_signalSem();
+        return FALLO;
+    }
+
+    // 5. Eliminar la entrada del directorio de origen
+    // Para ello, leemos la última entrada del directorio origen para sustituirla por la que borramos
+    struct inodo inodo_dir_orig;
+    if (leer_inodo(p_inodo_dir_orig, &inodo_dir_orig) == FALLO)
+    {
+        mi_signalSem();
+        return FALLO;
+    }
+
+    int num_entradas_orig = inodo_dir_orig.tamEnBytesLog / sizeof(struct entrada);
+
+    // Si la entrada a borrar no es la última, movemos la última a su posición
+    if (p_entrada_orig != num_entradas_orig - 1)
+    {
+        struct entrada ultima_entrada;
+        // Leer la última entrada
+        if (mi_read_f(p_inodo_dir_orig,
+                      &ultima_entrada,
+                      (num_entradas_orig - 1) * sizeof(struct entrada),
+                      sizeof(struct entrada)) == FALLO)
+        {
+            mi_signalSem();
+            return FALLO;
+        }
+        // Escribirla en la posición de la entrada que estamos moviendo/borrando
+        if (mi_write_f(p_inodo_dir_orig,
+                       &ultima_entrada,
+                       p_entrada_orig * sizeof(struct entrada),
+                       sizeof(struct entrada)) == FALLO)
+        {
+            mi_signalSem();
+            return FALLO;
+        }
+    }
+
+    // 6. Truncar el directorio origen para eliminar el registro sobrante del final
+    if (mi_truncar_f(p_inodo_dir_orig, (num_entradas_orig - 1) * sizeof(struct entrada)) == FALLO)
+    {
+        mi_signalSem();
+        return FALLO;
+    }
+
+    mi_signalSem();
 
     return EXITO;
 }

@@ -1,44 +1,37 @@
 #include "semaforo_mutex_posix.h"
 #include <stdio.h>
 
-#define SEM_NAME "/mymutex" /* Usamos este nombre para el semáforo mutex */ 
-#define SEM_INIT_VALUE 1 /* Valor inicial de los mutex */ 
-
-
 sem_t *initSem() {
-   /* name debe ser un nombre de caracteres ascii que comienze con "/", p.e. "/mimutex" */
-   sem_t *sem;
-
-
-   sem = sem_open(SEM_NAME, O_CREAT, S_IRWXU, SEM_INIT_VALUE);
-   if (sem == SEM_FAILED) {
-       perror("Error sem_open()");
-       return NULL;
-   }
-   return sem;
+    sem_t *sem;
+    // Abrimos/creamos el semáforo POSIX con nombre de forma segura
+    sem = sem_open(SEM_NAME, O_CREAT, S_IRWXU, SEM_INIT_VALUE);
+    if (sem == SEM_FAILED) {
+        perror("Error sem_open()");
+        return NULL;
+    }
+    return sem;
 }
 
-
-/* void deleteSem() {
-   sem_unlink(SEM_NAME);
-   // borra el semáforo del sistema y da problemas cuando
-   // los hijos en la simulación ejecutan bumount()
-} */
-
-
+// Cierra el descriptor del semáforo en el proceso actual (lo hacen hijos y padre)
 void deleteSem(sem_t *sem) {
-   //printf("Closing sem in address: %p\n", (void *)sem);
-   if (sem_close(sem) == -1) {
-       perror("Error deleteSem()");
-   }
+    if (sem) {
+        if (sem_close(sem) == -1) {
+            perror("Error en sem_close() dentro de deleteSem");
+        }
+    }
 }
 
+// Elimina el semáforo por completo del sistema operativo (SOLO lo llamará el padre)
+void destruirSem() {
+    if (sem_unlink(SEM_NAME) == -1) {
+        perror("Error en sem_unlink() dentro de destruirSem");
+    }
+}
 
 void signalSem(sem_t *sem) {
-   sem_post(sem);
+    sem_wait(sem); // En semáforos POSIX, wait resta 1 (Operación P)
 }
 
-
 void waitSem(sem_t *sem) {
-   sem_wait(sem);
+    sem_post(sem); // En semáforos POSIX, post suma 1 (Operación V)
 }
