@@ -1,37 +1,39 @@
-#include "semaforo_mutex_posix.h"
 #include <stdio.h>
+#include "semaforo_mutex_posix.h"
 
+// Inicializa el semáforo de forma limpia (borrando el anterior del kernel si existía)
 sem_t *initSem() {
     sem_t *sem;
-    // Abrimos/creamos el semáforo POSIX con nombre de forma segura
+
+    // Forzamos el borrado del semáforo residual en el sistema operativo
+    sem_unlink(SEM_NAME); 
+
+    // Creamos el semáforo limpio con valor inicial 1
     sem = sem_open(SEM_NAME, O_CREAT, S_IRWXU, SEM_INIT_VALUE);
     if (sem == SEM_FAILED) {
-        perror("Error sem_open()");
+        perror("Error grave en sem_open()");
         return NULL;
     }
     return sem;
 }
 
-// Cierra el descriptor del semáforo en el proceso actual (lo hacen hijos y padre)
-void deleteSem(sem_t *sem) {
-    if (sem) {
-        if (sem_close(sem) == -1) {
-            perror("Error en sem_close() dentro de deleteSem");
-        }
-    }
-}
-
-// Elimina el semáforo por completo del sistema operativo (SOLO lo llamará el padre)
-void destruirSem() {
-    if (sem_unlink(SEM_NAME) == -1) {
-        perror("Error en sem_unlink() dentro de destruirSem");
-    }
-}
-
-void signalSem(sem_t *sem) {
-    sem_wait(sem); // En semáforos POSIX, wait resta 1 (Operación P)
-}
-
+// Hace un wait atómico real sobre el semáforo POSIX
 void waitSem(sem_t *sem) {
-    sem_post(sem); // En semáforos POSIX, post suma 1 (Operación V)
+    if (sem_wait(sem) == -1) {
+        perror("Error en sem_wait()");
+    }
+}
+
+// Hace un signal atómico real sobre el semáforo POSIX
+void signalSem(sem_t *sem) {
+    if (sem_post(sem) == -1) {
+        perror("Error en sem_post()");
+    }
+}
+
+// Cierra el enlace del proceso con el semáforo
+void destruirSem() {
+    // Si tienes una variable global sem_t *mutex o pasas el puntero, se puede cerrar.
+    // Lo estándar para el unmount de los hijos es desvincularse:
+    sem_unlink(SEM_NAME);
 }

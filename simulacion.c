@@ -1,11 +1,7 @@
 #include "simulacion.h"
 #include "semaforo_mutex_posix.h"
 
-<<<<<<< HEAD
 // Variable global real 
-=======
-// Variable global real (compartida en este .c)
->>>>>>> e0b6e2efe9cd3724ad05310f5b6e8546095aa133
 int acabados = 0;
 
 void reaper() {
@@ -48,6 +44,7 @@ int main(int argc, char **argv) {
     }
 
     printf("*** SIMULACIÓN DE %d PROCESOS REALIZANDO CADA UNO %d ESCRITURAS ***\n", NUMPROCESOS, NUMESCRITURAS);
+    fflush(stdout); // ¡CRÍTICO! Obligamos a la terminal a pintar el mensaje antes del bucle fork
 
     // Creación de los procesos hijos
     for (int i = 1; i <= NUMPROCESOS; i++) {
@@ -89,7 +86,7 @@ int main(int argc, char **argv) {
             // Inicializar la semilla aleatoria única para este hijo
             srand(time(NULL) + mi_pid);
 
-            // Bucle de escrituras que faltaba
+            // Bucle de escrituras
             for (int nescritura = 1; nescritura <= NUMESCRITURAS; nescritura++) {
                 struct REGISTRO registro;
                 registro.fecha = time(NULL);
@@ -111,31 +108,22 @@ int main(int argc, char **argv) {
             }
 
             printf("[Proceso %d: Completadas %d escrituras en %s]\n", i, NUMESCRITURAS, ruta_fichero);
+            fflush(stdout); // Forzamos vaciado en cada hijo
 
             // Desmontar el dispositivo antes de salir
             bumount();
             exit(EXITO);
         }
 
-<<<<<<< HEAD
         // =================================================================
         // PROCESO PADRE (Lanzador)
         // =================================================================
-=======
-       
->>>>>>> e0b6e2efe9cd3724ad05310f5b6e8546095aa133
-        // Esperar 0.15 segundos garantizados (controlando interrupciones por señales)
-        unsigned int tiempo_espera = 150000;
-        while (tiempo_espera > 0) {
-            tiempo_espera = usleep(tiempo_espera);
-            // Si usleep se interrumpe por SIGCHLD, devuelve el tiempo restante.
-            // El bucle continuará durmiendo lo que falte.
-        }
+        // CORREGIDO: usleep directo de 0.15s para espaciar los forks de forma segura
+        usleep(150000); 
     }
 
     // El padre se duerme con pause() hasta que todos los hijos hayan sido recogidos por reaper
-<<<<<<< HEAD
-   while (acabados < NUMPROCESOS) {
+    while (acabados < NUMPROCESOS) {
         pause();
     }
 
@@ -146,13 +134,5 @@ int main(int argc, char **argv) {
     destruirSem(); 
 
     printf("Simulación completada con éxito.\n");
-=======
-    while (acabados < NUMPROCESOS) {
-        pause();
-    }
-    extern sem_t *mutex;
-    // Desmontar el dispositivo (padre)
-    bumount();
->>>>>>> e0b6e2efe9cd3724ad05310f5b6e8546095aa133
     return EXITO;
 }

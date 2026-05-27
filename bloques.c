@@ -20,12 +20,6 @@ static int descriptor = 0;
 int bmount(const char *camino) {
     //Llamamos a umask para asegurarnos de que los permisos se apliquen correctamente al crear el archivo
     umask(000);
-
-    // Si el proceso ya tenía un descriptor abierto (por ejemplo, tras el fork), lo cerramos
-    if (descriptor > 0) {
-        close(descriptor);
-    }
-
     // Abrimos con lectura/escritura y creación si no existe
     // Los permisos 0666 significan rw-rw-rw-
     descriptor = open(camino, O_RDWR | O_CREAT, 0666);
@@ -36,17 +30,12 @@ int bmount(const char *camino) {
         return FALLO;
     }
 
-    // El semáforo POSIX se enlaza siempre. initSem() usa sem_open(),
-    // el cual incrementa el contador de referencias del semáforo en el kernel de forma segura.
     mutex = initSem();
-    if (mutex == SEM_FAILED) {
-        perror("Error al inicializar el semáforo en bmount");
-        return -1;
+    if (mutex == NULL || mutex == SEM_FAILED) {
+        fprintf(stderr, "Error en bmount: No se pudo enlazar el semáforo mutex.\n");
+        return FALLO;
     }
     
-    // Forzamos a que tras un bmount nuevo (como el de cada hijo), el contador local empiece a 0
-    inside_sc = 0;
-
     return descriptor;
 }
 /**
@@ -54,24 +43,18 @@ int bmount(const char *camino) {
  * @return EXITO en caso de éxito o FALLO en caso de error
  */
 int bumount() {
-<<<<<<< HEAD
     if (descriptor == FALLO) return FALLO;
-=======
 
-    if (descriptor == FALLO) {
-        return FALLO;
-    }  
-
->>>>>>> e0b6e2efe9cd3724ad05310f5b6e8546095aa133
-    //Cerraramos el descriptor actual
     if (close(descriptor) == FALLO) {
         perror("Error en bumount");
         return FALLO;
     }
-
-    //Marcamos el descriptor como no válido tras cerrarlo para evitar usos posteriores no intencionados
     descriptor = FALLO;
     
+    // USAMOS LA FUNCIÓN REAL DE TU LIBRERÍA DE SEMÁFOROS
+    // Si tu función destruirSem() cierra el semáforo global, la llamamos aquí:
+    destruirSem(); 
+    mutex = NULL; 
 
     return EXITO; 
 }
@@ -136,16 +119,26 @@ int bread(unsigned int nbloque, void *buf) {
     return (int)bytes_leidos;
 }
 
-void mi_waitSem() {
-   if (!inside_sc) { // inside_sc == 0, nadie en este proceso ha cerrado el cerrojo aún
-       waitSem(mutex); 
-   } 
-   inside_sc++; 
+// =========================================================================
+// ENVOLTORIOS DE EXCLUSIÓN MUTUA REENTRANTES (En bloques.c)
+// =========================================================================
+
+void mi_waitSem() 
+{
+    if (!inside_sc) { 
+        // Llama a la función del Paso 1 pasando nuestro semáforo global
+        waitSem(mutex); 
+    }
+    inside_sc++; 
 }
 
-void mi_signalSem() {
-   inside_sc--; 
-   if (!inside_sc) { // Solo cuando el contador llega a 0, liberamos el cerrojo para el resto de procesos
-       signalSem(mutex);
-   }
+void mi_signalSem() 
+{
+    if (inside_sc > 0) {
+        inside_sc--; 
+        if (!inside_sc) { 
+            // Llama a la función del Paso 1 pasando nuestro semáforo global
+            signalSem(mutex); 
+        }
+    }
 }

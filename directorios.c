@@ -326,19 +326,31 @@ int mi_creat(const char *camino, unsigned char permisos)
     if (permisos > 7 || permisos < 0)
     {
         perror("Permisos inválidos");
-        return FALLO;
+        return FALLO; // No requiere semáforo porque salimos antes de interactuar con el disco
     }
+
+    // =========================================================================
+    // SECCIÓN CRÍTICA: Bloqueamos el acceso concurrente a los metadatos
+    // =========================================================================
+    mi_waitSem();
 
     unsigned int p_inodo_dir = 0; // raíz
     unsigned int p_inodo = 0;
     unsigned int p_entrada = 0;
 
-    int error = buscar_entrada(camino, &p_inodo_dir, &p_inodo, &p_entrada, 1, permisos); // reservar = 1 para crear si no existe
+    // reservar = 1 para crear si no existe
+    int error = buscar_entrada(camino, &p_inodo_dir, &p_inodo, &p_entrada, 1, permisos); 
     if (error < 0)
     {
         mostrar_error_buscar_entrada(error); // Mostrar mensaje de error específico
+        
+        // ¡CRÍTICO! Liberamos el semáforo antes de salir en caso de error
+        mi_signalSem(); 
         return FALLO;
     }
+
+    // Liberamos el semáforo tras haber creado con éxito la entrada
+    mi_signalSem(); 
 
     return EXITO;
 }
@@ -349,6 +361,11 @@ int mi_creat(const char *camino, unsigned char permisos)
  */
 int mi_dir(const char *camino, char *buffer, char tipo, char flag)
 {
+    // =========================================================================
+    // SECCIÓN CRÍTICA: Protegemos la lectura consistente del árbol de directorios
+    // =========================================================================
+    mi_waitSem();
+
     unsigned int p_inodo_dir = 0;
     unsigned int p_inodo = 0;
     unsigned int p_entrada = 0;
@@ -360,18 +377,26 @@ int mi_dir(const char *camino, char *buffer, char tipo, char flag)
 
     // 1. Buscar la entrada correspondiente al camino
     int error = buscar_entrada(camino, &p_inodo_dir, &p_inodo, &p_entrada, 0, 0);
-    if (error < 0) return error;
+    if (error < 0) {
+        mi_signalSem(); // ¡CRÍTICO! Liberar antes de salir
+        return error;
+    }
 
     // 2. Leer el inodo del elemento solicitado
-    if (leer_inodo(p_inodo, &inodo) == FALLO) return FALLO;
+    if (leer_inodo(p_inodo, &inodo) == FALLO) {
+        mi_signalSem(); // ¡CRÍTICO! Liberar antes de salir
+        return FALLO;
+    }
 
     // 3. Validación de sintaxis: Comprobar que el tipo de inodo coincide con la ruta
     if (inodo.tipo != tipo) {
+        mi_signalSem(); // ¡CRÍTICO! Liberar antes de salir
         return -10; // Error de concordancia de sintaxis capturado en mi_ls.c
     }
 
     // 4. Comprobar permisos de lectura
     if ((inodo.permisos & 4) != 4) {
+        mi_signalSem(); // ¡CRÍTICO! Liberar antes de salir
         return ERROR_PERMISO_LECTURA;
     }
 
@@ -409,6 +434,8 @@ int mi_dir(const char *camino, char *buffer, char tipo, char flag)
             // Modo simple: solo nombre coloreado
             sprintf(buffer, "%s%s%s\n", COLOR_FIC, nombre_fichero, COLOR_RESET);
         }
+        
+        mi_signalSem(); // Liberar antes del return exitoso de fichero
         return 1;
     }
 
@@ -420,11 +447,13 @@ int mi_dir(const char *camino, char *buffer, char tipo, char flag)
     for (int i = 0; i < nentradas; i++)
     {
         if (mi_read_f(p_inodo, &entrada, i * sizeof(struct entrada), sizeof(struct entrada)) == FALLO) {
+            mi_signalSem(); // ¡CRÍTICO! Liberar antes de salir
             return FALLO;
         }
         
         struct inodo inodo_entrada;
         if (leer_inodo(entrada.ninodo, &inodo_entrada) == FALLO) {
+            mi_signalSem(); // ¡CRÍTICO! Liberar antes de salir
             return FALLO;
         }
 
@@ -455,11 +484,14 @@ int mi_dir(const char *camino, char *buffer, char tipo, char flag)
             sprintf(tmp, "\t%d\t%s%s%s\n", inodo_entrada.tamEnBytesLog, color_nombre, entrada.nombre, COLOR_RESET);
             strcat(buffer, tmp);
         } else {
-            // Modo simple para directorios: exclusivamente los nombres coloreados con su salto de línea
+            // Modo simple para directorios
             sprintf(tmp, "%s%s%s\n", color_nombre, entrada.nombre, COLOR_RESET);
             strcat(buffer, tmp);
         }
     }
+
+    // Liberación tras listar con éxito el directorio completo
+    mi_signalSem();
 
     return nentradas;
 }
@@ -529,11 +561,14 @@ int mi_stat(const char *camino, struct STAT *p_stat)
     static struct UltimaEntrada UltimaEntradaEscritura;
 #endif
 
-int mi_write(const char *camino, const void *buf, unsigned int offset, unsigned int nbytes) {
+int mi_write(const char *camino, const void *buf, unsigned int offset, unsigned int nbytes) 
+{
+    mi_waitSem();
+
     unsigned int p_inodo_dir = 0, p_inodo = 0, p_entrada = 0;
     int encontrado = -1;
+    int resultado = 0;
 
-    // --- Se busca la entrada del camino ---
 #if (USARCACHE > 0)
     #if (USARCACHE == 1)
         if (strcmp(UltimaEntradaEscritura.camino, camino) == 0) {
@@ -545,7 +580,7 @@ int mi_write(const char *camino, const void *buf, unsigned int offset, unsigned 
             if (strcmp(UltimasEntradas[i].camino, camino) == 0) {
                 p_inodo = UltimasEntradas[i].p_inodo;
                 encontrado = i;
-                #if (USARCACHE == 3) // Actualizar sello de tiempo para LRU
+                #if (USARCACHE == 3)
                     gettimeofday(&UltimasEntradas[i].ultima_consulta, NULL);
                 #endif
                 break;
@@ -554,31 +589,26 @@ int mi_write(const char *camino, const void *buf, unsigned int offset, unsigned 
     #endif
 #endif
 
-    // --- Si no está se busca ---
     if (encontrado == -1) {
         int error = buscar_entrada(camino, &p_inodo_dir, &p_inodo, &p_entrada, 0, 0);
         if (error < 0) {
             mostrar_error_buscar_entrada(error);
-            return error;
+            resultado = error;
+            goto salida_write;
         }
 
-        // --- Actualiza el cache ---
 #if (USARCACHE == 1)
         strcpy(UltimaEntradaEscritura.camino, camino);
         UltimaEntradaEscritura.p_inodo = p_inodo;
 #elif (USARCACHE == 3)
-        // Buscar el hueco libre o la entrada más antigua (LRU)
         int indice_lru = 0;
         struct timeval min_time;
-        gettimeofday(&min_time, NULL); // Tiempo actual
-
+        gettimeofday(&min_time, NULL);
         for (int i = 0; i < CACHE_SIZE; i++) {
-            // Si hay un hueco vacío (camino vacío)
             if (UltimasEntradas[i].camino[0] == '\0') {
                 indice_lru = i;
                 break;
             }
-            // Si no, buscamos el que tenga el tiempo menor
             if (UltimasEntradas[i].ultima_consulta.tv_sec < min_time.tv_sec ||
                (UltimasEntradas[i].ultima_consulta.tv_sec == min_time.tv_sec && 
                 UltimasEntradas[i].ultima_consulta.tv_usec < min_time.tv_usec)) {
@@ -586,90 +616,68 @@ int mi_write(const char *camino, const void *buf, unsigned int offset, unsigned 
                 indice_lru = i;
             }
         }
-        // Reemplazar la entrada más antigua
         strcpy(UltimasEntradas[indice_lru].camino, camino);
         UltimasEntradas[indice_lru].p_inodo = p_inodo;
         gettimeofday(&UltimasEntradas[indice_lru].ultima_consulta, NULL);
 #endif
     }
 
-    // --- ESCRITURA FINAL ---
-    return mi_write_f(p_inodo, buf, offset, nbytes);
+    resultado = mi_write_f(p_inodo, buf, offset, nbytes);
+
+salida_write:
+    mi_signalSem();
+    return resultado;
 }
 
-int mi_read(const char *camino,
-            void *buf,
-            unsigned int offset,
-            unsigned int nbytes)
+int mi_read(const char *camino, void *buf, unsigned int offset, unsigned int nbytes)
 {
+    mi_waitSem();
+
     unsigned int p_inodo_dir = 0;
     unsigned int p_inodo = 0;
     unsigned int p_entrada = 0;
-
     int encontrado = 0;
-
-    // =========================
-    // BUSCAR EN CACHÉ
-    // =========================
+    int resultado = 0;
 
 #if (USARCACHE == 1)
-
     if (strcmp(UltimaEntradaEscritura.camino, camino) == 0)
     {
         p_inodo = UltimaEntradaEscritura.p_inodo;
         encontrado = 1;
     }
-
 #endif
-
-    // =========================
-    // SI NO ESTÁ EN CACHÉ
-    // =========================
 
     if (!encontrado)
     {
-        int error = buscar_entrada(camino,
-                                   &p_inodo_dir,
-                                   &p_inodo,
-                                   &p_entrada,
-                                   0,
-                                   0);
-
+        int error = buscar_entrada(camino, &p_inodo_dir, &p_inodo, &p_entrada, 0, 0);
         if (error < 0)
         {
-            return error;
+            resultado = error;
+            goto salida_read;
         }
 
 #if (USARCACHE == 1)
-
         strcpy(UltimaEntradaEscritura.camino, camino);
         UltimaEntradaEscritura.p_inodo = p_inodo;
-
 #endif
     }
 
-    // =========================
-    // LEER FICHERO
-    // =========================
+    resultado = mi_read_f(p_inodo, buf, offset, nbytes);
 
-    int bytes_leidos = mi_read_f(p_inodo,
-                                 buf,
-                                 offset,
-                                 nbytes);
-
-    if (bytes_leidos < 0)
-    {
-        return FALLO;
-    }
-
-    return bytes_leidos;
+salida_read:
+    mi_signalSem();
+    return resultado;
 }
 
 //nivel 10
 
-int mi_link(const char *camino1,
-            const char *camino2)
+int mi_link(const char *camino1, const char *camino2)
 {
+    // =========================================================================
+    // SECCIÓN CRÍTICA: Bloqueamos acceso concurrente a metadatos
+    // =========================================================================
+    mi_waitSem();
+
     unsigned int p_inodo_dir1 = 0;
     unsigned int p_inodo1 = 0;
     unsigned int p_entrada1 = 0;
@@ -679,122 +687,110 @@ int mi_link(const char *camino1,
     // =========================
     // BUSCAR camino1
     // =========================
-
-    int error = buscar_entrada(camino1,
-                               &p_inodo_dir1,
-                               &p_inodo1,
-                               &p_entrada1,
-                               0,
-                               0);
-
+    int error = buscar_entrada(camino1, &p_inodo_dir1, &p_inodo1, &p_entrada1, 0, 0);
     if (error < 0)
     {
+        mi_signalSem(); // ¡CRÍTICO! Liberar antes de salir
         return error;
     }
 
     // =========================
     // LEER INODO ORIGINAL
     // =========================
-
     if (leer_inodo(p_inodo1, &inodo1) == FALLO)
     {
+        mi_signalSem(); // ¡CRÍTICO! Liberar antes de salir
         return FALLO;
     }
 
     // =========================
     // COMPROBAR QUE ES FICHERO
     // =========================
-
     if (inodo1.tipo != 'f')
     {
+        mi_signalSem(); // ¡CRÍTICO! Liberar antes de salir
         return ERROR_NO_SE_PUEDE_CREAR_ENTRADA_EN_UN_FICHERO;
     }
 
     // =========================
     // COMPROBAR PERMISO LECTURA
     // =========================
-
     if ((inodo1.permisos & 4) != 4)
     {
+        mi_signalSem(); // ¡CRÍTICO! Liberar antes de salir
         return ERROR_PERMISO_LECTURA;
     }
 
     // =========================
     // CREAR camino2
     // =========================
-
     unsigned int p_inodo_dir2 = 0;
     unsigned int p_inodo2 = 0;
     unsigned int p_entrada2 = 0;
 
-    error = buscar_entrada(camino2,
-                           &p_inodo_dir2,
-                           &p_inodo2,
-                           &p_entrada2,
-                           1,
-                           6);
-
+    error = buscar_entrada(camino2, &p_inodo_dir2, &p_inodo2, &p_entrada2, 1, 6);
     if (error < 0)
     {
+        mi_signalSem(); // ¡CRÍTICO! Liberar antes de salir
         return error;
     }
 
     // =========================
     // LEER ENTRADA CREADA
     // =========================
-
     struct entrada entrada2;
 
-    if (mi_read_f(p_inodo_dir2,
-                  &entrada2,
-                  p_entrada2 * sizeof(struct entrada),
-                  sizeof(struct entrada)) == FALLO)
+    if (mi_read_f(p_inodo_dir2, &entrada2, p_entrada2 * sizeof(struct entrada), sizeof(struct entrada)) == FALLO)
     {
+        mi_signalSem(); // ¡CRÍTICO! Liberar antes de salir
         return FALLO;
     }
 
     // =========================
     // HACER LINK AL MISMO INODO
     // =========================
-
     entrada2.ninodo = p_inodo1;
 
-    if (mi_write_f(p_inodo_dir2,
-                   &entrada2,
-                   p_entrada2 * sizeof(struct entrada),
-                   sizeof(struct entrada)) == FALLO)
+    if (mi_write_f(p_inodo_dir2, &entrada2, p_entrada2 * sizeof(struct entrada), sizeof(struct entrada)) == FALLO)
     {
+        mi_signalSem(); // ¡CRÍTICO! Liberar antes de salir
         return FALLO;
     }
 
     // =========================
     // LIBERAR INODO RESERVADO
     // =========================
-
     if (liberar_inodo(p_inodo2) == FALLO)
     {
+        mi_signalSem(); // ¡CRÍTICO! Liberar antes de salir
         return FALLO;
     }
 
     // =========================
     // ACTUALIZAR NLINKS
     // =========================
-
     inodo1.nlinks++;
-
     inodo1.ctime = time(NULL);
 
     if (escribir_inodo(p_inodo1, &inodo1) == FALLO)
     {
+        mi_signalSem(); // ¡CRÍTICO! Liberar antes de salir
         return FALLO;
     }
 
+    // Liberación tras ejecución exitosa de la función
+    mi_signalSem(); 
     return EXITO;
 }
 
 
 int mi_unlink(const char *camino)
 {
+    // =========================================================================
+    // SECCIÓN CRÍTICA: Bloqueamos acceso concurrente a metadatos
+    // =========================================================================
+    mi_waitSem();
+
     unsigned int p_inodo_dir = 0;
     unsigned int p_inodo = 0;
     unsigned int p_entrada = 0;
@@ -805,78 +801,62 @@ int mi_unlink(const char *camino)
     // =========================
     // BUSCAR ENTRADA
     // =========================
-
-    int error = buscar_entrada(camino,
-                               &p_inodo_dir,
-                               &p_inodo,
-                               &p_entrada,
-                               0,
-                               0);
-
+    int error = buscar_entrada(camino, &p_inodo_dir, &p_inodo, &p_entrada, 0, 0);
     if (error < 0)
     {
+        mi_signalSem(); // ¡CRÍTICO! Liberar antes de salir
         return error;
     }
 
     // =========================
     // LEER INODO
     // =========================
-
     if (leer_inodo(p_inodo, &inodo) == FALLO)
     {
+        mi_signalSem(); // ¡CRÍTICO! Liberar antes de salir
         return FALLO;
     }
 
     // =========================
-    // SI ES DIRECTORIO:
-    // COMPROBAR QUE ESTÁ VACÍO
+    // SI ES DIRECTORIO: COMPROBAR QUE ESTÁ VACÍO
     // =========================
-
-    if (inodo.tipo == 'd' &&
-        inodo.tamEnBytesLog > 0)
+    if (inodo.tipo == 'd' && inodo.tamEnBytesLog > 0)
     {
-        fprintf(stderr,
-                RED "El directorio no está vacío\n" RESET);
-
+        fprintf(stderr, RED "El directorio no está vacío\n" RESET);
+        mi_signalSem(); // ¡CRÍTICO! Liberar antes de salir
         return FALLO;
     }
 
     // =========================
     // LEER INODO DEL DIRECTORIO PADRE
     // =========================
-
     struct inodo inodo_dir;
 
     if (leer_inodo(p_inodo_dir, &inodo_dir) == FALLO)
     {
+        mi_signalSem(); // ¡CRÍTICO! Liberar antes de salir
         return FALLO;
     }
 
     // Número total de entradas
-    int num_entradas =
-        inodo_dir.tamEnBytesLog / sizeof(struct entrada);
+    int num_entradas = inodo_dir.tamEnBytesLog / sizeof(struct entrada);
 
     // =========================
     // SI NO ES LA ÚLTIMA ENTRADA
     // =========================
-
     if (p_entrada != (num_entradas - 1))
     {
         // Leer última entrada
-        if (mi_read_f(p_inodo_dir,
-                      &ultimaEntrada,
-                      (num_entradas - 1) * sizeof(struct entrada),
-                      sizeof(struct entrada)) == FALLO)
+        if (mi_read_f(p_inodo_dir, &ultimaEntrada, (num_entradas - 1) * sizeof(struct entrada), sizeof(struct entrada)) == FALLO)
         {
+            mi_signalSem(); // ¡CRÍTICO! Liberar antes de salir
             return FALLO;
         }
 
         // Escribirla en la posición borrada
-        if (mi_write_f(p_inodo_dir,
-                       &ultimaEntrada,
-                       p_entrada * sizeof(struct entrada),
-                       sizeof(struct entrada)) == FALLO)
+        if (mi_write_f(p_inodo_dir, &ultimaEntrada, p_entrada * sizeof(struct entrada), sizeof(struct entrada)) == FALLO)
         {
+            mi_signalSem(); // ¡CRÍTICO! Liberar antes de salir
             return FALLO;
         }
     }
@@ -884,17 +864,15 @@ int mi_unlink(const char *camino)
     // =========================
     // TRUNCAR DIRECTORIO PADRE
     // =========================
-
-    if (mi_truncar_f(p_inodo_dir,
-                     (num_entradas - 1) * sizeof(struct entrada)) == FALLO)
+    if (mi_truncar_f(p_inodo_dir, (num_entradas - 1) * sizeof(struct entrada)) == FALLO)
     {
+        mi_signalSem(); // ¡CRÍTICO! Liberar antes de salir
         return FALLO;
     }
 
     // =========================
     // ACTUALIZAR NLINKS
     // =========================
-
     inodo.nlinks--;
 
     if (inodo.nlinks == 0)
@@ -902,6 +880,7 @@ int mi_unlink(const char *camino)
         // Liberar inodo
         if (liberar_inodo(p_inodo) == FALLO)
         {
+            mi_signalSem(); // ¡CRÍTICO! Liberar antes de salir
             return FALLO;
         }
     }
@@ -912,12 +891,15 @@ int mi_unlink(const char *camino)
 
         if (escribir_inodo(p_inodo, &inodo) == FALLO)
         {
+            mi_signalSem(); // ¡CRÍTICO! Liberar antes de salir
             return FALLO;
         }
     }
 
+    // Liberación tras borrar con éxito el elemento
+    mi_signalSem(); 
     return EXITO;
-} 
+}
 
     // =========================
     // MEJORAS NIVEL 10
@@ -1111,7 +1093,7 @@ int mi_mv(const char *camino_origen, const char *camino_destino)
     }
 
     // =========================================================================
-    //  CREA ENTRADA EN DESTINO Y ELIMINAR EN ORIGEN
+    // SECCIÓN CRÍTICA: CREAR ENTRADA EN DESTINO Y ELIMINAR EN ORIGEN
     // =========================================================================
 
     mi_waitSem();
