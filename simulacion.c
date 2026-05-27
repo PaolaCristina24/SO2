@@ -113,9 +113,7 @@ int main(int argc, char **argv) {
             exit(EXITO);
         }
 
-        // =================================================================
-        // PROCESO PADRE (Lanzador)
-        // =================================================================
+       
         // Esperar 0.15 segundos garantizados (controlando interrupciones por señales)
         unsigned int tiempo_espera = 150000;
         while (tiempo_espera > 0) {

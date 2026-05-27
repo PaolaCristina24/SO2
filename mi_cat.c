@@ -3,10 +3,13 @@
 
 int main(int argc, char const *argv[])
 {
-    // =========================
-    // COMPROBAR SINTAXIS
-    // =========================
-
+   
+ //   if (argc != 3)
+    {
+        fprintf(stderr,
+                RED "Sintaxis: ./mi_cat <disco> </ruta_fichero>\n" RESET);
+        return FALLO;
+    }
     if (argc != 3)
     {
         fprintf(stderr,
@@ -14,9 +17,7 @@ int main(int argc, char const *argv[])
         return FALLO;
     }
 
-    // =========================
-    // COMPROBAR QUE ES FICHERO
-    // =========================
+
 
     if (argv[2][strlen(argv[2]) - 1] == '/')
     {
@@ -25,19 +26,13 @@ int main(int argc, char const *argv[])
         return FALLO;
     }
 
-    // =========================
-    // MONTAR DISCO
-    // =========================
-
+// Montamos el disco
     if (bmount(argv[1]) == FALLO)
     {
         perror("Error en bmount");
         return FALLO;
     }
-
-    // =========================
-    // VARIABLES
-    // =========================
+// Ruta del fichero a leer
 
     const char *camino = argv[2];
 
@@ -51,9 +46,7 @@ int main(int argc, char const *argv[])
 
     int leidos;
 
-    // =========================
-    // LEER FICHERO
-    // =========================
+    // Leemos el fichero
 
     memset(buffer, 0, sizeof(buffer));
 
@@ -72,9 +65,7 @@ int main(int argc, char const *argv[])
         leidos = mi_read(camino, buffer, offset, tambuffer);
     }
 
-    // =========================
-    // ERROR LECTURA
-    // =========================
+// Comprobamos si ha habido un error en la lectura
 
     if (leidos < 0)
     {
@@ -87,17 +78,12 @@ int main(int argc, char const *argv[])
         return FALLO;
     }
 
-    // =========================
-    // MOSTRAR TOTAL LEÍDO
-    // =========================
+// Imprimimos el total de bytes leídos
 
     fprintf(stderr,
             "\n\nTotal_leidos %d\n",
             bytes_leidos);
-
-    // =========================
-    // DESMONTAR DISCO
-    // =========================
+// Desmontamos el disco
 
     if (bumount() == FALLO)
     {
