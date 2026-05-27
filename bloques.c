@@ -4,6 +4,7 @@
  * @author Paola Chacín
  * @author Yassin EL Gharsa
  */
+//cambios
 #include "bloques.h"
 #include "semaforo_mutex_posix.h"
 

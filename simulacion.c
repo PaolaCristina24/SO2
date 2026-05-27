@@ -1,6 +1,6 @@
 #include "simulacion.h"
 #include "semaforo_mutex_posix.h"
-
+//mirar la verificacion
 // Variable global real 
 int acabados = 0;
 
