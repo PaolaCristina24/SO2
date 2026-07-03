@@ -38,3 +38,4 @@ int mi_unlink(const char* camino);
 //MEJORAS
 int mi_rn(const char *camino_antiguo, const char *nombre_nuevo);
 int mi_mv(const char *camino_origen, const char *camino_destino);
+int mi_cp(unsigned int p_inodo_origen, const char *camino_destino, unsigned char permisos);

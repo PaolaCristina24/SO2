@@ -1190,3 +1190,29 @@ int mi_mv(const char *camino_origen, const char *camino_destino)
 
     return EXITO;
 }
+int mi_cp(unsigned int p_inodo_origen, const char *camino_destino, unsigned char permisos) {
+    unsigned int p_inodo_dir_dest = 0, p_inodo_destino = 0, p_entrada_dest = 0;
+    
+    // Crear archivo destino con los permisos idénticos
+    int error = buscar_entrada(camino_destino, &p_inodo_dir_dest, &p_inodo_destino, &p_entrada_dest, 1, permisos);
+    if (error < 0) return FALLO;
+
+    char buffer_lectura[TAMBUFFER];
+    char buffer_ceros[TAMBUFFER];
+    memset(buffer_ceros, 0, TAMBUFFER);
+
+    int offset = 0;
+    int bytes_leidos = 0;
+
+    // Lectura secuencial y escritura selectiva (evitando escribir bloques de ceros)
+    while ((bytes_leidos = mi_read_f(p_inodo_origen, buffer_lectura, offset, TAMBUFFER)) > 0) {
+        if (memcmp(buffer_lectura, buffer_ceros, bytes_leidos) != 0) {
+            if (mi_write_f(p_inodo_destino, buffer_lectura, offset, bytes_leidos) == FALLO) {
+                return FALLO;
+            }
+        }
+        offset += bytes_leidos;
+    }
+
+    return EXITO;
+}

@@ -3,21 +3,13 @@
 
 int main(int argc, char const *argv[])
 {
-   
- //   if (argc != 3)
-    {
-        fprintf(stderr,
-                RED "Sintaxis: ./mi_cat <disco> </ruta_fichero>\n" RESET);
-        return FALLO;
-    }
+    
     if (argc != 3)
     {
         fprintf(stderr,
                 RED "Sintaxis: ./mi_cat <disco> </ruta_fichero>\n" RESET);
         return FALLO;
     }
-
-
 
     if (argv[2][strlen(argv[2]) - 1] == '/')
     {
