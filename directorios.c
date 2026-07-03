@@ -1204,7 +1204,7 @@ int mi_cp(unsigned int p_inodo_origen, const char *camino_destino, unsigned char
     int offset = 0;
     int bytes_leidos = 0;
 
-    // Lectura secuencial y escritura selectiva (evitando escribir bloques de ceros)
+    // Lectura secuencial y escritura selectiva NO ESCRIBE EN BLOQUES 0
     while ((bytes_leidos = mi_read_f(p_inodo_origen, buffer_lectura, offset, TAMBUFFER)) > 0) {
         if (memcmp(buffer_lectura, buffer_ceros, bytes_leidos) != 0) {
             if (mi_write_f(p_inodo_destino, buffer_lectura, offset, bytes_leidos) == FALLO) {
